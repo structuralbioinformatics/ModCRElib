@@ -1,0 +1,98 @@
+[
+    {
+        "database": "cisbp",
+        "code": "T034259_2.00",
+        "pwm": "M09817_2.00.meme",
+        "similarity": 1.0
+    },
+    {
+        "database": "cisbp",
+        "code": "T034259_2.00",
+        "pwm": "M09816_2.00.meme",
+        "similarity": 1.0
+    },
+    {
+        "database": "cisbp",
+        "code": "T034259_2.00",
+        "pwm": "M09819_2.00.meme",
+        "similarity": 1.0
+    },
+    {
+        "database": "cisbp",
+        "code": "T034259_2.00",
+        "pwm": "M08716_2.00.meme",
+        "similarity": 1.0
+    },
+    {
+        "database": "cisbp",
+        "code": "T034259_2.00",
+        "pwm": "M09818_2.00.meme",
+        "similarity": 1.0
+    },
+    {
+        "database": "cisbp",
+        "code": "T038427_2.00",
+        "pwm": "M05978_2.00.meme",
+        "similarity": 0.32
+    },
+    {
+        "database": "cisbp",
+        "code": "T038427_2.00",
+        "pwm": "M05977_2.00.meme",
+        "similarity": 0.32
+    },
+    {
+        "database": "cisbp",
+        "code": "T038427_2.00",
+        "pwm": "M03615_2.00.meme",
+        "similarity": 0.32
+    },
+    {
+        "database": "jaspar",
+        "code": "P30561",
+        "pwm": "MA0006.2.meme",
+        "similarity": 0.71
+    },
+    {
+        "database": "jaspar",
+        "code": "P30561",
+        "pwm": "MA0006.1.meme",
+        "similarity": 0.71
+    },
+    {
+        "database": "jaspar",
+        "code": "G5EGD2",
+        "pwm": "MA2168.1.meme",
+        "similarity": 0.31
+    },
+    {
+        "database": "jaspar",
+        "code": "O61734",
+        "pwm": "MA2305.1.meme",
+        "similarity": 0.32
+    },
+    {
+        "database": "hocomoco",
+        "code": "P30561",
+        "pwm": "AHR_MOUSE.H11MO.0.B.meme",
+        "similarity": 0.71
+    },
+    {
+        "database": "hocomoco",
+        "code": "P35869",
+        "pwm": "AHR_HUMAN.H11MO.0.B.meme",
+        "similarity": 1.0
+    },
+    {
+        "database": "modcre",
+        "code": "5nj8_A_1",
+        "pwm": "MODEL_sp_P35869_AHR_HUMAN:34:272_5nj8_A_1.meme",
+        "similarity": 0.0
+    },
+    {
+        "database": "modcre",
+        "code": "5nj8_A_2",
+        "pwm": "MODEL_sp_P35869_AHR_HUMAN:34:272_5nj8_A_2.meme",
+        "similarity": 0.0
+    }
+]

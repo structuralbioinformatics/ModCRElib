@@ -380,9 +380,12 @@ class MSA(object):
         if name.endswith(".meme"):name.rstrip(".meme")
         self._motif=name
 
-    def set_pwm(self):
-        self._pwm=[]
-        if len(self._sequences)>0:
+    def set_pwm(self,pwm=None):
+        if pwm is not None:
+         self._pwm=pwm
+        if pwm is None:
+         self._pwm=[]
+         if len(self._sequences)>0:
            pfm = []
            binding = list(zip(*[i[0] for i in self.get_sequences()]))
            self._binding_site_length = len(binding)
@@ -414,6 +417,7 @@ class MSA(object):
            number_of_sequences=self._max_sequences[3]
         else:
            number_of_sequences = maxsi
+        number_of_sequences = number_of_sequences * len(self.get_residues())   
         if len(self._sequences) <= 0 and len(self._pwm)>0:
            sequence_residue=[]
            if len(self._pwm) != self.get_binding_site_length(): self.set_binding_site_length(len(self._pwm))
@@ -426,6 +430,11 @@ class MSA(object):
                        vector.append(0)
                sequence_residue.append(vector)
            done=(sum([sum([n for n in sequence_residue[i]]) for i in range(self.get_binding_site_length())]) == 0 )
+           null_position=set()
+           for i in range(self.get_binding_site_length()):
+               done_position = (sum([n for n in sequence_residue[i]]) == 0)
+               if done_position:
+                  null_position.add(i)
            s=0
            while s < number_of_sequences:
                seq=""
@@ -439,9 +448,9 @@ class MSA(object):
                        jjj=float(jj+nr)/float(len(self.get_residues()))
                        j=jj+nr-int(jjj)*len(self.get_residues())
                        base = self.residues[j]
-                       if dummy[i][j]>0:
+                       if dummy[i][j]>0 or i in null_position:
                           seq = seq + base
-                          dummy[i][j] = dummy[i][j] - 1
+                          dummy[i][j] = max(0,dummy[i][j] - 1)
                           add_one = False
                if (len(seq)==self.get_binding_site_length()):
                  if (seq,1.0) not in self.get_sequences():
@@ -452,13 +461,15 @@ class MSA(object):
                  else:
                     if counter > 100:
                        sc=min([float(x[1]) for x in self.get_sequences()])
-                       self.add_sequence(seq,sc-0.001/(s+1))
+                       self.add_sequence(seq,sc-0.01/(s+1))
                        counter=0
                        s = s+1
                        sequence_residue = dummy[:]
                     else:
                        counter = counter +1
+               done=(sum([sum([n for n in sequence_residue[i]]) for i in range(self.get_binding_site_length())]) == 0 )
                for i in range(self.get_binding_site_length()):
+                 if i in null_position: continue
                  if done: continue
                  if not done:
                     done = (sum([n for n in sequence_residue[i]]) == 0)
@@ -1595,6 +1606,13 @@ def get_min_max_scores(msa_obj, binding_site,  x3dna_obj, potentials,  split_pot
 
     if (max_score - min_score) < 1.0e-6:
        print(("Warning to use Max/Min [ %f vs %f ]"%(max_score,min_score)))
+       if max_score < min_score:
+          swap_score= max_score
+          max_score = min_score
+          min_score = swap_score
+       if (max_score - min_score) < 1.0e-6:
+          max_score = min_score + 1.0
+       print(("Modified Max/Min [ %f vs %f ]"%(max_score,min_score)))
 
     return min_score, max_score
 
