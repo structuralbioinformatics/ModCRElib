@@ -872,7 +872,7 @@ class Profile(object):
           for ii in range(len(thresholds)):
              thr = thresholds[ii]
              if thr is None: name_thr=name_sc+"_1.0"
-             else:           name_thr=name_sc+"_"+thr
+             else:           name_thr=name_sc+"_"+str(thr)
              dna=self.get_dna()
              text_dna = np.array(["".join(dna[k:min(k+6,len(dna))])+"..." for k in range(len(dna))])
              if "fimo" in sc:
@@ -1386,7 +1386,7 @@ class ProfileProtein(object):
           for ii in range(len(thresholds)):
              thr = thresholds[ii]
              if thr is None: name_thr=name_sc+"_1.0"
-             else:           name_thr=name_sc+"_"+thr
+             else:           name_thr=name_sc+"_"+str(thr)
              dna=self.get_dna()
              text_dna = np.array(["".join(dna[k:min(k+6,len(dna))])+"..." for k in range(len(dna))])
              if "fimo" in sc:
@@ -1629,14 +1629,14 @@ class twoprofile(object):
               name_sc=sc
               for thr in thresholds:
                   if thr is None: continue
-                  name=name_sc+"_"+thr
+                  name=name_sc+"_"+str(thr)
                   tbl_dict.setdefault(name+"_wilcoxon_score",self.get_wilcoxon_score(thr,sc))
                   tbl_dict.setdefault(name+"_mannwhitney_score",self.get_mannwhitney_score(thr,sc))
           if "energy"  in sc :
               for potential in split_potentials:
                 for thr in thresholds:
                   if thr is None: namep = potential + "_" + sc
-                  else:           namep = potential + "_" + sc +"_weighted_"+thr
+                  else:           namep = potential + "_" + sc +"_weighted_"+str(thr)
                   for normal in normalization:
                      if "best" in sc and normal:continue
                      if normal: name = "normal_"+namep 
@@ -1662,14 +1662,14 @@ class twoprofile(object):
               name_sc=sc
               for thr in thresholds:
                   if thr is None: continue
-                  name=name_sc+"_"+thr
+                  name=name_sc+"_"+str(thr)
                   tbl_dict.setdefault(name+"_paired",self.get_paired_difference(thr,sc).mean(0))
                   tbl_dict.setdefault(name+"_standard",self.get_standard_difference(thr,sc).mean(0))
           if "energy"  in sc :
               for potential in split_potentials:
                 for thr in thresholds:
                   if thr is None: namep = potential + "_" + sc
-                  else:           namep = potential + "_" + sc +"_weighted_"+thr
+                  else:           namep = potential + "_" + sc +"_weighted_"+str(thr)
                   for normal in normalization:
                      if "best" in sc and normal:continue
                      if normal: name = "normal_"+namep 
@@ -1695,14 +1695,14 @@ class twoprofile(object):
               name_sc=sc
               for thr in thresholds:
                   if thr is None: continue
-                  name=name_sc+"_"+thr
+                  name=name_sc+"_"+str(thr)
                   tbl_dict.setdefault(name+"_paired",self.get_paired_difference(thr,sc).std(0))
                   tbl_dict.setdefault(name+"_standard",self.get_standard_difference(thr,sc).std(0))
           if "energy"  in sc :
               for potential in split_potentials:
                 for thr in thresholds:
                   if thr is None: namep = potential + "_" + sc
-                  else:           namep = potential + "_" + sc +"_weighted_"+thr
+                  else:           namep = potential + "_" + sc +"_weighted_"+str(thr)
                   for normal in normalization:
                      if "best" in sc and normal:continue
                      if normal: name = "normal_"+namep 
@@ -1821,7 +1821,7 @@ class twoprofile(object):
           for ii in range(len(thresholds)):
              thr = thresholds[ii]
              if thr is None: name_thr=name_sc+"_1.0"
-             else:           name_thr=name_sc+"_"+thr
+             else:           name_thr=name_sc+"_"+str(thr)
              dna_one=profile_one.get_dna()
              dna_two=profile_two.get_dna()
              text_one = np.array(["".join(dna_one[k:min(k+6,len(dna_one))])+"..." for k in range(len(dna_one))])
@@ -1839,8 +1839,8 @@ class twoprofile(object):
                if "binding" in sc: 
                    e=np.zeros(len(y))
                    d=np.zeros(len(z))
-               legend_one="P1 P-val<"+thr
-               legend_two="P2 P-val<"+thr
+               legend_one="P1 P-val<"+str(thr)
+               legend_two="P2 P-val<"+str(thr)
                if "binding" in sc and thr=="0.01":
                   #trace_one = go.Scatter(x = x, y = y, text=text_one, mode = 'lines', name = legend_one, legendgroup = thr, line = dict(color=red_color[ii],width = 3), fill='tonexty',  hoverinfo="x+y+text", visible = True)
                   #upper_bound_one = go.Scatter(x = x, y = y+e, mode = 'lines', name = legend_one, legendgroup = thr, line = dict(color=red_color[ii],width = 0.8), fill='tonexty',  showlegend = False, hoverinfo='none', visible = True)
@@ -1895,8 +1895,8 @@ class twoprofile(object):
                    visible=False
                    if thr is None: thre="1.0"
                    else: thre=thr
-                   legend_one="P1 P-val<"+thre
-                   legend_two="P2 P-val<"+thre
+                   legend_one="P1 P-val<"+str(thre)
+                   legend_two="P2 P-val<"+str(thre)
                    #trace_one =       go.Scatter(x = x, y = y, text=text_one, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 3),  fill='tonexty', hoverinfo="x+y+text", visible = visible)
                    #upper_bound_one = go.Scatter(x = x, y = y+e, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 0.8), fill='tonexty', showlegend = False, hoverinfo='none', visible = visible)
                    #lower_bound_one = go.Scatter(x = x, y = y-e, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 0.8),  showlegend = False, hoverinfo='none', visible = visible)
