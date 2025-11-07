@@ -1,7 +1,10 @@
 import re
+import sys
 
+sourceDatabaseTXT = sys.argv[1]
+scanDatabaseTXT = sys.argv[2]
 
-with open("database.txt") as f_in, open("scanning_database.txt", "w") as f_out:
+with open(sourceDatabaseTXT) as f_in, open(scanDatabaseTXT, "w") as f_out:
     for line in f_in:
         if line.startswith("MOTIF"):
             # Find both model strings

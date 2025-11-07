@@ -10,10 +10,11 @@
 4) decompress them
     a) tar -xvzf pbm.tgz (110 Gb)
     b) tar -xvzf pdb.tgz (88 Gb)
-5) Replace the empty pwm folder in pbm with the provided pmw folder in PWMdatabase
+5) Replace the empty pwms folder in pbm with the provided pmws folder in PWMdatabase
 6) Ensure all dependencies are installed
 7) Change paths in ModCRElib/configure/config.ini to point to the correct location for your installations. 
-
+    a) Some of the files are provided, in these cases the appended "~/Path/To/Install/" just needs to be replaced with the path of the install
+    b) For SBILib you can either use the path to the provided package or use an independant install 
 
 ## Dependencies:
 
@@ -58,7 +59,7 @@ Modelling a Transcription Factor (TF) from an amino acid sequence
 #### ------
 1) We need a single or multi fasta file containing a.a. sequence of protein to be modelled (example of AHR_Example.fa is given)
 2) modelling.sh contains the command to model the protein with the following edits necessary:<br/>
-    pdb="/home/pgohl/ModCRE_Package/pdb" Needs to be replaced with the location of the downloaded pdb folder on your machine<br/>
+    pdb="./pdb" Needs to be replaced with the location of the downloaded pdb folder on your machine<br/>
     -i uniput protein in fasta (could be multi fasta)<br/>
     -o output directory (models) <br/>
 #### ------
@@ -74,8 +75,8 @@ Predict TF binding specificity
     arg 2 = output folder<br/>
     (python bin/renumberModels.py models remodels)<br/>
 4) pwm.sh predicts the binding specificity<br/>
-    pdb="/home/pgohl/ModCRE_Package/pdb" Needs to be replaced with the location of the downloaded pdb folder on your machine<br/>
-    pbm="/home/pgohl/ModCRE_Package/pbm" Needs to be replaced with the location of the downloaded pbm folder on your machine<br/>
+    pdb="./pdb" Needs to be replaced with the location of the downloaded pdb folder on your machine<br/>
+    pbm="./pbm" Needs to be replaced with the location of the downloaded pbm folder on your machine<br/>
 #### ------
 We now have a predicted binding specificity of the transcription factor in pwm and meme format in the output folder specified in the previous command.<br/> 
 Remember that ModCRE is designed to use PWMs in aggregate to predict binding sites and individual PWM predictions may be more or less accurate.<br/> 
@@ -84,9 +85,10 @@ Remember that ModCRE is designed to use PWMs in aggregate to predict binding sit
 ## Example 3
 Scan dna sequence for binding sites
 #### ------
-5) pwm/make_scan_ready.py is file that generates a database file of the predicted pwms from the previous step that are in the correct format for scanning.<br/>
-    -line 4 references "database.txt" (the generated database file from pwm.sh) and the name of the new file to be used for scanning<br/>
-6) scan_sequence.sh is the script to run a scan with.
+5) bin/make_scan_ready.py is file that generates a database file of the predicted pwms from the previous step that are in the correct format for scanning.<br/>
+    arg 1 = location of the input database file<br/>
+    arg 2 = location of the output database file<br/> 
+6) scan_sequence.sh is the script to run a scan with.<br/>
     -i The dna sequence file in fasta format that is to be scanned<br/>
     -o the name of the output folder<br/>
     -s the species identifier (if restricting scan to TFs of a given specie)<br/>
@@ -109,7 +111,7 @@ We can view the TFs binding to the full scanned DNA sequence as predicted in the
     -t indicates that threads are used instead of aa sequences<br/>
     -o the output folder location <br/>
 8) We copy the desired models (from the output of the previous step) into a folder containg all the binary interactions that we would like to use in the modelled complex<br/>
-9) rename_complex_input.py is a python script that prepares scanning output file names for complex builder (eg. python rename_complex_input.py BinaryInteractions/A9YTQ3.5nj8_1A.18-29.pdb ---> BinaryInteractions/A9YTQ3.5nj8_1A.18-29:1:243_TF.pdb)<br/>
+9) rename_complex_input.py is a python script that prepares scanning output file names for complex builder (eg. python ../bin/rename_complex_input.py BinaryInteractions/A9YTQ3.5nj8_1A.18-29.pdb ---> BinaryInteractions/A9YTQ3.5nj8_1A.18-29:1:243_TF.pdb)<br/>
     -the name of the file must follow the following format:<br/>
         {UniprotAccession}.{PDBID}_{Chain}.{index of binding start}-{index of binding end}:{model start index}:{model end index}_{a label}.pdb<br/>
 10) BuildComplex.sh is the script that will build a complex based on binary interaction files contained in a given folder<br/>
@@ -127,8 +129,8 @@ Now the modelled complex can be view in the output folder (Complex/fragment_1-10
 Generate thread files from a modelled TF 
 #### ------
 11) get_best_bindings_threads.sh produces thread files for use in modelling and retrieving scores.<br/> 
-    pdb="/home/pgohl/ModCRE_Package/pdb" Needs to be replaced with the location of the downloaded pdb folder on your machine<br/>
-    pbm="/home/pgohl/ModCRE_Package/pbm" Needs to be replaced with the location of the downloaded pbm folder on your machine<br/>
+    pdb="./pdb" Needs to be replaced with the location of the downloaded pdb folder on your machine<br/>
+    pbm="./pbm" Needs to be replaced with the location of the downloaded pbm folder on your machine<br/>
     -i (the pdb of the transcription factor to be used)<br/>
     -o (output directory)  <br/>
     --seq fasta sequence containing DNA sequence to be bound<br/>
@@ -167,8 +169,9 @@ Generate a scoring profile plot for a TF along a DNA sequence
 The output will be stored in each folder provided by the input file. A folder will have been generated and named <br/>
 profilerinput.txt_profiling.34_272 by default (profilerinput.txt being the input file, profiling the folder from that file).<br/>
 Within can be found individual model scores (pickle files) as well as the mean tables (csv files)<br/>
+Plots will also have been generated, if multiple DNA sequences were profiled any file containing *compare* will be a comparison of profiles on these DNA sequences<br/>
 #### ------
-14) bin/plotprofile.py will generate a plot from the mean score file<br/>
+14) bin/plotprofile.py will generate a plot from the mean score file if the default plots aren't desired<br/>
     arg 1 = path to the mean table to be plotted <br/>
     arg 2 = location the plot is to be stored at<br/>
     arg 3 = column (score type) to be plotted (options will be printed out if provided isn't in file)<br/>

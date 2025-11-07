@@ -23,7 +23,7 @@ module load CD-HIT/4.8.1-GCC-10.2.0
 #module load imp/2.21.0-GCC-10.2.0
 module load Ghostscript/9.53.3-GCCcore-10.2.0
 
-cd /home/pgohl/ModCRE_Package
+#cd ./
 
 input="JSON"
 modcre="pwm"

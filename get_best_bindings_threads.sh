@@ -24,8 +24,8 @@ module load CD-HIT/4.8.1-GCC-10.2.0
 module load Ghostscript/9.53.3-GCCcore-10.2.0
 
 
-pdb="/home/pgohl/ModCRE_Package/pdb"
-pbm="/home/pgohl/ModCRE_Package/pbm"
+pdb="./pdb"
+pbm="./pbm"
 dummy="./dummy"
 delta=1
 

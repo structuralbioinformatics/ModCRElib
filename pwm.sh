@@ -23,8 +23,8 @@ module load CD-HIT/4.8.1-GCC-10.2.0
 #module load imp/2.21.0-GCC-10.2.0
 module load Ghostscript/9.53.3-GCCcore-10.2.0
 
-pdb="/home/pgohl/ModCRE_Package/pdb"
-pbm="/home/pgohl/ModCRE_Package/pbm"
+pdb="./pdb"
+pbm="./pbm"
 
 
 python exe/pwm_pbm.py -i remodels -o pwm --pdb=${pdb} --pbm=${pbm}  --refine 2  --dummy=./dummy --auto --known

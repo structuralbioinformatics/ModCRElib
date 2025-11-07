@@ -24,13 +24,12 @@ module load CD-HIT/4.8.1-GCC-10.2.0
 module load Ghostscript/9.53.3-GCCcore-10.2.0
 
 
-pdb="/home/pgohl/ModCRE_Package/pdb"
-pbm="/home/pgohl/ModCRE_Package/pbm"
+pdb="./pdb"
+pbm="./pbm"
 dummy="./dummy"
 
 #/soft/system/software/x3dna/2.3/bin/fiber  -seq=GAGCTGCCCACCCCGCTACAGCAGCTGGCTGTGCAAGGTGGCTGGACCACA -b BinaryInteractions/dnasequence.pdb
 /soft/system/software/x3dna/2.3/bin/fiber -seq=aaaaaaaaaaaaatttaggaggcccaaaaaaaaaaaaa -b BinaryInteractions/dnasequence.pdb
-#cp threads/MODEL_SP_P35869_AHR_HUMAN:34:272_5NJ8_A_1_A.pdb  BinaryInteractions/
 
 python exe/complexbuilder.py -d BinaryInteractions -o Complex > Complex/complex.log 2>&1 
 

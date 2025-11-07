@@ -24,8 +24,8 @@ module load CD-HIT/4.8.1-GCC-10.2.0
 module load Ghostscript/9.53.3-GCCcore-10.2.0
 
 
-pdb="/home/pgohl/ModCRE_Package/pdb"
-pbm="/home/pgohl/ModCRE_Package/pbm"
+pdb="./pdb"
+pbm="./pbm"
 dumm="./dummy"
 
 python exe/scan.py --dummy=$dummy -i profiling/profile.fa -o scanning --pbm=$pbm --pdb=$pdb -s 9606 -v --db ./pwm/scanning_database.txt -c --ft 0.05 > scanning/Scan_output.log 2>&1

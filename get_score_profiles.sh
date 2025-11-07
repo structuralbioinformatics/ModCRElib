@@ -24,8 +24,8 @@ module load CD-HIT/4.8.1-GCC-10.2.0
 module load Ghostscript/9.53.3-GCCcore-10.2.0
 
 
-pdb="/home/pgohl/ModCRE_Package/../TempFileStorage_ModCRE_Package/pdb"
-pbm="/home/pgohl/ModCRE_Package/../TempFileStorage_ModCRE_Package/pbm"
+pdb="./pdb"
+pbm="./pbm"
 dummy="./dummy"
 
 python exe/xprofiler.py --dummy $dummy -i profiling/ASBprofilerinput.txt  -d profiling/profile.fa  --pbm $pbm --pdb $pdb -v --auto --known --refine 2 --plot --html > profiling/profiler.log 2>&1
