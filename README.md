@@ -7,14 +7,14 @@
     a) wget http://aleph.upf.edu/modcrefiles/pbm.tgz (60 Gb)
     b) wget http://aleph.upf.edu/modcrefiles/pdb.tgz (57 Gb)
 3) place these folders into the downloaded reopository
-4) decompress them
-    a) tar -xvzf pbm.tgz (110 Gb)
-    b) tar -xvzf pdb.tgz (88 Gb)
+4) decompress them<br/>
+    a) tar -xvzf pbm.tgz (110 Gb)<br/>
+    b) tar -xvzf pdb.tgz (88 Gb)<br/>
 5) Replace the empty pwms folder in pbm with the provided pmws folder in PWMdatabase
 6) Ensure all dependencies are installed
-7) Change paths in ModCRElib/configure/config.ini to point to the correct location for your installations. 
-    a) Some of the files are provided, in these cases the appended "~/Path/To/Install/" just needs to be replaced with the path of the install
-    b) For SBILib you can either use the path to the provided package or use an independant install 
+7) Change paths in ModCRElib/configure/config.ini to point to the correct location for your installations. <br/>
+    a) Some of the files are provided, in these cases the appended "~/Path/To/Install/" just needs to be replaced with the path of the install<br/>
+    b) For SBILib you can either use the path to the provided package or use an independant install <br/>
 
 ## Dependencies:
 
