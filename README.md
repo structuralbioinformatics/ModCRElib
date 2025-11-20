@@ -67,6 +67,7 @@ We now have a folder containing the modelled Transcription factor in pdb format.
 You can view the file in chimera or online at https://www.rcsb.org/3d-view by uploading the file.<br/>
 Example:<br/>
 ![Structure of a TF predicted by ModCRElib](images/TF_predicted_model.png)
+<p style="text-align: center;"><em>Structure of a TF predicted by ModCRElib</em></p>
 #### ------
 
 ## Example 2
@@ -84,6 +85,7 @@ We now have a predicted binding specificity of the transcription factor in pwm a
 Remember that ModCRE is designed to use PWMs in aggregate to predict binding sites and individual PWM predictions may be more or less accurate.<br/> 
 Example:<br/>
 ![ModCRElib predicted PWM logo for a TF](images/MODEL_sp_P35869_AHR_HUMAN:34:272_5nj8_A_2.logo.fwd.png)
+<p style="text-align: center;"><em>ModCRElib predicted PWM logo for a TF</em></p>
 #### ------
 
 ## Example 3
@@ -129,6 +131,7 @@ We can view the TFs binding to the full scanned DNA sequence as predicted in the
 Now the modelled complex can be view in the output folder (Complex/fragment_1-100/dna__1-100_aa.pdb).<br/>
 Example:<br/>
 ![ModCRElib predicted structure of a TF binding to its predicted binding site on DNA sequence](images/TF_bound_DNA.png) 
+<p style="text-align: center;"><em>ModCRElib predicted structure of a TF binding to its predicted binding site on DNA sequence</em></p>
 #### ------
 
 ## Example 5
@@ -178,6 +181,7 @@ Within can be found individual model scores (pickle files) as well as the mean t
 Plots will also have been generated, if multiple DNA sequences were profiled any file containing *compare* will be a comparison of profiles on these DNA sequences<br/>
 Example:<br/>
 ![Normalized binding score plot of a TF binding at an allele specific binding site for wildtype and mutant sequence ](images/ASBprofilerinput.txt_profiling.HasBind_1.LostBind_2.compare_normal_s3dc_dd.png)
+<p style="text-align: center;"><em>Normalized binding score plot of a TF binding at an allele specific binding site for wildtype and mutant sequence</em></p>
 #### ------
 14) bin/plotprofile.py will generate a plot from the mean score file if the default plots aren't desired<br/>
     arg 1 = path to the mean table to be plotted <br/>
