@@ -20,18 +20,18 @@
 
 ### Python
 ----
-Bio              → from Biopython (`pip install biopython`)<br/>
-SBILib           → comes with package but can be installed seperately (`pip install SBILib` see https://github.com/structuralbioinformatics/SBILib for dependencies)<br/>
-bs4              → BeautifulSoup (`pip install beautifulsoup4`)<br/>
-bottle           → lightweight web framework (`pip install bottle`)<br/>
-ihm              → Integrative Modeling library (`pip install ihm`)<br/>
-matplotlib       → plotting library (`pip install matplotlib`)<br/>
-numpy            → numerical computing (`pip install numpy`)<br/>
-pandas           → data analysis (`pip install pandas`)<br/>
-plotly           → interactive plotting (`pip install plotly`)<br/>
-scipy            → scientific computing (`pip install scipy`)<br/>
-seaborn          → statistical plotting (`pip install seaborn`)<br/>
-sklearn          → scikit-learn (`pip install scikit-learn`)<br/>
+Bio (run on 1.79)          → from Biopython (`pip install biopython`)<br/>
+SBILib (run on 0.3.3)      → comes with package but can be installed seperately (`pip install SBILib` see https://github.com/structuralbioinformatics/SBILib for dependencies)<br/>
+bs4 (run on 4.12.3)        → BeautifulSoup (`pip install beautifulsoup4`)<br/>
+bottle (run on 0.13.4)     → lightweight web framework (`pip install bottle`)<br/>
+ihm (run on 2.7)           → Integrative Modeling library (`pip install ihm`)<br/>
+matplotlib (run on 3.4.2)  → plotting library (`pip install matplotlib`)<br/>
+numpy (run on 1.23.0)      → numerical computing (`pip install numpy`)<br/>
+pandas (run on 1.2.4)      → data analysis (`pip install pandas`)<br/>
+plotly (run on 5.11.0)     → interactive plotting (`pip install plotly`)<br/>
+scipy (run on 1.9.3)       → scientific computing (`pip install scipy`)<br/>
+seaborn (run on 0.11.2)    → statistical plotting (`pip install seaborn`)<br/>
+sklearn (run on 1.3.2)     → scikit-learn (`pip install scikit-learn`)<br/>
 
 ### Enviornmental
 ---
