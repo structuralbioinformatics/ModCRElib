@@ -65,6 +65,8 @@ Modelling a Transcription Factor (TF) from an amino acid sequence
 #### ------
 We now have a folder containing the modelled Transcription factor in pdb format.<br/>
 You can view the file in chimera or online at https://www.rcsb.org/3d-view by uploading the file.<br/>
+Example:<br/>
+![Structure of a TF predicted by ModCRElib](images/TF_predicted_model.png)
 #### ------
 
 ## Example 2
@@ -80,6 +82,8 @@ Predict TF binding specificity
 #### ------
 We now have a predicted binding specificity of the transcription factor in pwm and meme format in the output folder specified in the previous command.<br/> 
 Remember that ModCRE is designed to use PWMs in aggregate to predict binding sites and individual PWM predictions may be more or less accurate.<br/> 
+Example:<br/>
+![ModCRElib predicted PWM logo for a TF](images/MODEL_sp_P35869_AHR_HUMAN:34:272_5nj8_A_2.logo.fwd.png)
 #### ------
 
 ## Example 3
@@ -122,7 +126,9 @@ We can view the TFs binding to the full scanned DNA sequence as predicted in the
         -d the folder containing the binary interaction files<br/>
         -o the output folder location <br/>
 #### ------
-Now the modelled complex can be view in the output folder (Complex/fragment_1-100/dna__1-100_aa.pdb).<br/> 
+Now the modelled complex can be view in the output folder (Complex/fragment_1-100/dna__1-100_aa.pdb).<br/>
+Example:<br/>
+![ModCRElib predicted structure of a TF binding to its predicted binding site on DNA sequence](images/TF_bound_DNA.png) 
 #### ------
 
 ## Example 5
@@ -170,6 +176,8 @@ The output will be stored in each folder provided by the input file. A folder wi
 profilerinput.txt_profiling.34_272 by default (profilerinput.txt being the input file, profiling the folder from that file).<br/>
 Within can be found individual model scores (pickle files) as well as the mean tables (csv files)<br/>
 Plots will also have been generated, if multiple DNA sequences were profiled any file containing *compare* will be a comparison of profiles on these DNA sequences<br/>
+Example:<br/>
+![Normalized binding score plot of a TF binding at an allele specific binding site for wildtype and mutant sequence ](images/ASBprofilerinput.txt_profiling.HasBind_1.LostBind_2.compare_normal_s3dc_dd.png)
 #### ------
 14) bin/plotprofile.py will generate a plot from the mean score file if the default plots aren't desired<br/>
     arg 1 = path to the mean table to be plotted <br/>
