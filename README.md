@@ -18,6 +18,43 @@
 
 ## Dependencies:
 
+### Enviornmental
+---
+BLAST+ (run on 2.12.0)            → (https://bio.tools/ncbi_blast_plus) <br/>
+CD-HIT (run on 4.8.1)             → (https://bio.tools/cd-hit) <br/>
+Clustal-Omega (run on 1.2.4)      → (https://bio.tools/clustalo) <br/>
+ClustalW2 (run on 2.1)            → (https://bio.tools/clustalw2_ebi) <br/>
+EMBOSS (run on 6.6.0)             → (https://bio.tools/emboss) <br/>
+Ghostscript (run on 9.53.3)       → (https://www.ghostscript.com/) <br/>
+HMMER (run on 3.3.2)              → (https://bio.tools/hmmer3) <br/> 
+MEME (run on 5.1.1)               → (https://bio.tools/meme_suite) <br/>
+Modeller (run on 10.3)            → (https://bio.tools/modeller) <br/>
+Python (run on 3.8.6)             → (https://www.python.org/) <br/>
+TMalign (run on Version 30012025) → (https://aideepmed.com/TM-align/) <br/>
+dssp (run on 3.0.0)               → (https://bio.tools/dssp) <br/>
+x3dna (run on 2.5.0)              → (https://x3dna.org/) <br/>
+
+## Automatic dependency install 
+Most dependencies can be installed in bulk via the provided environment.yml file. <br/>
+Run: conda env create -f environment.yml <br/>
+To activate the environment Run: conda activate modcrelib_env <br/>
+Versions are approximate; minor differences should not affect results.<br/>
+
+## Additional manual dependencies
+
+The following tools must be installed separately:<br/>
+
+### Modeller
+Download from: https://salilab.org/modeller/<br/>
+Requires a license key.<br/>
+Add to PATH:<br/>
+    export PATH=/path/to/modeller/bin:$PATH
+
+### TMalign
+Download binary from: https://aideepmed.com/TM-align/<br/>
+Add to PATH:<br/>
+    export PATH=/path/to/TMalign:$PATH
+
 ### Python
 ----
 Bio (run on 1.79)          → from Biopython (`pip install biopython`)<br/>
@@ -33,25 +70,30 @@ scipy (run on 1.9.3)       → scientific computing (`pip install scipy`)<br/>
 seaborn (run on 0.11.2)    → statistical plotting (`pip install seaborn`)<br/>
 sklearn (run on 1.3.2)     → scikit-learn (`pip install scikit-learn`)<br/>
 
-### Enviornmental
----
-BLAST+ (run on 2.12.0)<br/>
-CD-HIT (run on 4.8.1)<br/>
-Clustal-Omega (run on 1.2.4)<br/>
-ClustalW2 (run on 2.1)<br/>
-EMBOSS (run on 6.6.0)<br/>
-Ghostscript (run on 9.53.3)<br/>
-HMMER (run on 3.3.2)<br/>
-MEME (run on 5.1.1)<br/>
-Modeller (run on 10.3)<br/>
-Python (run on 3.8.6)<br/>
-TMalign (run on Version 30012025)<br/>
-dssp (run on 3.0.0)<br/>
-x3dna (run on 2.5.0)<br/>
+We have provided a requirements.txt file. To install these packages in the modcrelib_env environment run (pip install -r requirements.txt)<br/>
 
 ----------
 ## Using ModCRElib
 ----------
+
+## Environment Setup
+
+All scripts call `env_setup.sh`, which:<br/>
+
+- Loads modules automatically on HPC systems<br/>
+- Uses existing PATH/conda environments on local systems<br/>
+
+### Recommended (local users)
+
+conda env create -f environment.yml<br/>
+conda activate modcre_env<br/>
+
+### (manual tools)
+
+Set paths for tools not included in conda:<br/>
+
+export TMALIGN_BIN=/path/to/TMalign<br/>
+export MODELLER_BIN=/path/to/modeller<br/>
 
 
 ## Example 1 
