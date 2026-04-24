@@ -37,6 +37,15 @@ from ModCRElib.builder import pbm
 #-------------#
 
 def GC_content(kmer):
+    """
+    Compute GC fraction for a DNA k-mer.
+
+    Args:
+        kmer (str): DNA sequence.
+
+    Returns:
+        float: Fraction of ``G`` and ``C`` bases in ``kmer``.
+    """
     size = float(len(kmer))
     if size == 0.0: return 0.0
     gc   = 0
@@ -47,9 +56,13 @@ def GC_content(kmer):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for parsed benchmark table generation.
 
+    How to run:
+        ``python benchmark.parsed.py -n run_id --pbm pbm_dir [options]``
+
+    Returns:
+        optparse.Values: Namespace with input/output paths and sampling controls.
     """
 
     parser = optparse.OptionParser("python benchmark.parsed.py -n n --pbm=pbm_dir [-o output_dir -r randoms]")

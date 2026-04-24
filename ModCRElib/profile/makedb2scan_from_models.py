@@ -1,3 +1,12 @@
+"""
+Build a PWM scanning database from structural models and PWM files.
+
+The script extracts protein sequences from a directory of PDB models, prepares
+the FASTA files expected by the ModCRE scanning pipeline, concatenates MEME PWM
+files into a single database file, and then delegates the final database
+assembly to ``ModCRElib.web.md2p.get_userdb``.
+"""
+
 import os, sys, re
 import configparser
 import json
@@ -64,11 +73,36 @@ pdb_dir = config.get("Paths", "pdb_dir")
 
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse command-line options for database generation from structural models.
 
-    parser = optparse.OptionParser("Usage: makedb2scan.py -i PWMS_DIR -s FASTA_FILE  [-o OUTPUT_DIR -v]")
+    How to run:
+        python makedb2scan_from_models.py -i PWMS_DIR -p MODELS_DIR
+            [-o OUTPUT_DIR -v]
+
+    Example:
+        python makedb2scan_from_models.py -i pwm_models -p pdb_models
+            -o scan_db -v
+
+    The parser configures:
+        - Input PWM directory and directory with structural models.
+        - Optional output directory for generated scan database artifacts.
+        - Verbose logging mode.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed options with the input PWM directory, the input
+        models directory, the optional output directory, and the verbosity
+        flag.
+
+    Raises:
+        SystemExit: Triggered by ``OptionParser`` when required arguments are
+        missing or invalid.
+    """
+
+    parser = optparse.OptionParser("Usage: makedb2scan_from_models.py -i PWMS_DIR -p MODELS_DIR [-o OUTPUT_DIR -v]")
 
     parser.add_option("-i", "--pwm-dir", default=None, action="store", type="string", dest="pwms_dir", help="PWMs directory ", metavar="PWMS_DIR")
     parser.add_option("-p", "--pdb", default=None, action="store", type="string", dest="models_dir", help="Folder with protein 3D models ", metavar="MODELS_DIR")
@@ -83,13 +117,24 @@ def parse_options():
     return options
 
 
-#---------------#
-# Main          #
-#---------------#
+def main():
+    """
+    Generate a scan-ready PWM database from model structures and motif files.
 
+    Workflow:
+        1. Parse command-line arguments and resolve the working directories.
+        2. Read each input PDB model and extract concatenated protein-chain
+           sequences into a FASTA file when it does not already exist.
+        3. Create per-protein FASTA files plus sequence lookup tables in the
+           output ``sequences`` directory.
+        4. Merge all MEME-formatted PWM files into ``pwm_database.txt``.
+        5. Call ``MD2P.get_userdb`` to build the final PWM database,
+           association file, and homologs directory used downstream.
 
-if __name__ == "__main__":
-
+    Returns:
+        None. The function writes its results to the selected output directory
+        and reports the generated paths to standard output.
+    """
 
     # Arguments & Options #
     try:
@@ -190,3 +235,10 @@ if __name__ == "__main__":
               print("Fail when constructing database of PWMs: check the format of the protein sequences")
               print(e)
 
+
+#---------------#
+# Main          #
+#---------------#
+
+if __name__ == "__main__":
+    main()

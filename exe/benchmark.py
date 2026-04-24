@@ -52,9 +52,14 @@ from ModCRElib.structure.dna import x3dna
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for benchmark data generation and evaluation.
 
+    How to run:
+        ``python benchmark.py --pbm pbm_dir --pdb pdb_dir [options]``
+
+    Returns:
+        optparse.Values: Namespace with benchmark inputs, fold controls, and
+        execution flags.
     """
 
     parser = optparse.OptionParser("python benchmark.py --pbm=pbm_dir --pdb=pdb_dir [--dummy=dummy_dir -f folds -o output_dir -r randoms --start=start_step --stop=stop_step -v]")
@@ -87,15 +92,14 @@ def parse_options():
 
 def split_list_into_n_sublists_old(list_of_items, n=5):
     """
-    This function splits a {list} of items into a {list} containing n {list}s.
+    Split a list of items into ``n`` approximately balanced sublists.
 
-    @input:
-    list_of_items {list}
-    n {int} by default is 5
+    Args:
+        list_of_items (list): Input items.
+        n (int): Number of output sublists.
 
-    @return:
-    list_of_lists {list} of {list}s
-
+    Returns:
+        list[list]: Partitioned sublists.
     """
 
     # Initialize #
@@ -124,15 +128,14 @@ def split_list_into_n_sublists_old(list_of_items, n=5):
 
 def split_list_into_n_sublists(list_of_items, n=5):
     """
-    This function splits a {list} of items into a {list} containing n {list}s.
+    Shuffle items and distribute them across ``n`` sublists.
 
-    @input:
-    list_of_items {list}
-    n {int} by default is 5
+    Args:
+        list_of_items (list): Input items.
+        n (int): Number of output sublists.
 
-    @return:
-    list_of_lists {list} of {list}s
-
+    Returns:
+        list[list]: Shuffled and balanced sublists.
     """
     from random import shuffle
     # Initialize #
@@ -151,6 +154,16 @@ def split_list_into_n_sublists(list_of_items, n=5):
     return list_of_lists
 
 def get_data_frame(file_name):
+    """
+    Load parsed benchmark rows into a typed pandas DataFrame.
+
+    Args:
+        file_name (str): Input benchmark table path.
+
+    Returns:
+        pandas.DataFrame: DataFrame with columns ``fold``, ``family``, ``score``,
+        and ``class``.
+    """
 
     # Initialize #
     data = []
@@ -173,6 +186,18 @@ def get_data_frame(file_name):
     return data_frame
 
 def get_aucpr_data(data_frame, families, folds, file_name):
+    """
+    Compute and write AUC-PR values for each family/fold.
+
+    Args:
+        data_frame (pandas.DataFrame): Benchmark observations.
+        families (list[str]): Families to evaluate.
+        folds (int): Number of cross-validation folds.
+        file_name (str): Output file path.
+
+    Returns:
+        None.
+    """
     
     # Write output #
     functions.write(file_name, "#family;%s" % ";".join(map(str, [i + 1 for i in range(folds)])))
@@ -194,6 +219,18 @@ def get_aucpr_data(data_frame, families, folds, file_name):
         functions.write(file_name, "%s;%s" % (family, ";".join(map(str, aucpr))))
 
 def get_auroc_data(data_frame, families, folds, file_name):
+    """
+    Compute and write AUROC values for each family/fold.
+
+    Args:
+        data_frame (pandas.DataFrame): Benchmark observations.
+        families (list[str]): Families to evaluate.
+        folds (int): Number of cross-validation folds.
+        file_name (str): Output file path.
+
+    Returns:
+        None.
+    """
     
     # Write output #
     functions.write(file_name, "#family;%s" % ";".join(map(str, [i + 1 for i in range(folds)])))
@@ -216,6 +253,16 @@ def get_auroc_data(data_frame, families, folds, file_name):
 
 
 def get_auroc(scores, labels):
+   """
+   Compute AUROC from prediction scores and binary labels.
+
+   Args:
+       scores (list[float]): Prediction scores.
+       labels (list[int]): Binary ground-truth labels.
+
+   Returns:
+       float | None: AUROC value, or ``None`` on computation failure.
+   """
    pred = numpy.array(scores)
    y    = numpy.array(labels)
    auroc = None
@@ -228,6 +275,16 @@ def get_auroc(scores, labels):
    return auroc
 
 def get_aucpr(scores, labels):
+    """
+    Compute AUC-PR via trapezoidal integration on interpolated points.
+
+    Args:
+        scores (list[float]): Prediction scores.
+        labels (list[int]): Binary ground-truth labels.
+
+    Returns:
+        float: Area under precision-recall curve.
+    """
 
     # Initialize #
     TPA = 0
@@ -268,6 +325,19 @@ def get_aucpr(scores, labels):
     return numpy.trapz(x=x, y=y)
 
 def interpolate(TPA, TPB, FPA, FPB, total_positives):
+    """
+    Interpolate precision-recall points between consecutive confusion states.
+
+    Args:
+        TPA (int | float): True positives at point A.
+        TPB (int | float): True positives at point B.
+        FPA (int | float): False positives at point A.
+        FPB (int | float): False positives at point B.
+        total_positives (int | float): Total positives in the dataset.
+
+    Returns:
+        list[tuple[float, float]]: Interpolated ``(recall, precision)`` points.
+    """
 
     # Initialize #
     points = []
@@ -285,6 +355,22 @@ def interpolate(TPA, TPB, FPA, FPB, total_positives):
     return points
 
 def get_precision_recall_fpr_data(data_frame, families, scores, folds, ratio, file_name_a, file_name_b, file_name_c):
+    """
+    Write precision, recall, and false-positive-rate tables by threshold.
+
+    Args:
+        data_frame (pandas.DataFrame): Benchmark observations.
+        families (list[str]): Families to evaluate.
+        scores (list[float]): Score thresholds.
+        folds (int): Number of cross-validation folds.
+        ratio (float): Reserved compatibility parameter.
+        file_name_a (str): Precision output table.
+        file_name_b (str): Recall output table.
+        file_name_c (str): FPR output table.
+
+    Returns:
+        None.
+    """
 
     # Initialize #
     total_positives = {}
@@ -336,6 +422,21 @@ def get_precision_recall_fpr_data(data_frame, families, scores, folds, ratio, fi
 
 
 def get_precision_recall_data(data_frame, families, scores, folds, ratio, file_name_a, file_name_b):
+    """
+    Write precision and recall tables by score threshold.
+
+    Args:
+        data_frame (pandas.DataFrame): Benchmark observations.
+        families (list[str]): Families to evaluate.
+        scores (list[float]): Score thresholds.
+        folds (int): Number of cross-validation folds.
+        ratio (float): Reserved compatibility parameter.
+        file_name_a (str): Precision output table.
+        file_name_b (str): Recall output table.
+
+    Returns:
+        None.
+    """
 
     # Initialize #
     total_positives = {}
@@ -378,6 +479,16 @@ def get_precision_recall_data(data_frame, families, scores, folds, ratio, file_n
             functions.write(file_name_b, "%s;%s;%s" % (family, score, ";".join(map(str, recall))))
 
 def get_auprc_values(file_name, family=None):
+    """
+    Yield numeric AUPRC values from a benchmark result file.
+
+    Args:
+        file_name (str): Input table path.
+        family (str | None): Optional family filter.
+
+    Yields:
+        float: Parsed AUPRC values.
+    """
 
     # For each line... #
     for line in functions.parse_file(file_name):
@@ -390,6 +501,18 @@ def get_auprc_values(file_name, family=None):
             except: pass
 
 def one_sided_wilcoxon_test(a, b, bonferroni_correction=1):
+    """
+    Run one-sided Wilcoxon signed-rank test and return corrected significance.
+
+    Args:
+        a (array-like): First paired sample.
+        b (array-like): Second paired sample.
+        bonferroni_correction (int | float): Multiplicative correction factor.
+
+    Returns:
+        tuple[float, float, bool, float]: Median(a), median(b), ``b>a`` flag, and
+        corrected one-sided p-value.
+    """
 
     try:
       statistic, p_value = wilcoxon(a, b)
@@ -404,6 +527,18 @@ def one_sided_wilcoxon_test(a, b, bonferroni_correction=1):
     return a, b, b > a, (p_value / 2) * bonferroni_correction
 
 def get_precision_recall_score(data_frame, thd_precision=None, thd_recall=None, thd_score=None):
+    """
+    Select best precision/recall operating point under optional constraints.
+
+    Args:
+        data_frame (pandas.DataFrame): Summary statistics by score.
+        thd_precision (float | None): Optional minimum precision constraint.
+        thd_recall (float | None): Reserved parameter.
+        thd_score (float | None): Optional maximum score to inspect.
+
+    Returns:
+        tuple[float, float | None, float | None]: Selected precision, recall, score.
+    """
 
     # Initialize #
     precision = 0

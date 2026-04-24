@@ -54,7 +54,28 @@ nitrogenous_bases["J"]=nitrogenous_bases["G"]
 nitrogenous_bases["Q"]=nitrogenous_bases["G"]
 
 
-def  get_triads(thr_obj,thr_dir,pdb_dir,verbose=False,dummy_dir="/tmp"):
+def  get_triads(thr_obj,thr_dir,pdb_dir,verbose=False,dummy_dir="/tmp",clean=False):
+    """
+        Resolve and load triads/x3dna/pdb objects for a threading target.
+    
+        Args:
+            thr_obj (Threaded): Parsed threading object.
+            thr_dir (str): Directory containing threading/template files.
+            pdb_dir (str): PDB resources directory.
+            verbose (bool, optional): Enable verbose logs.
+            dummy_dir (str, optional): Temporary directory root.
+            clean (bool, optional): Clean PDB before deriving triads.
+    
+        Returns:
+            tuple: `(triads_obj, pdb_obj, x3dna_obj)`.
+    
+    Args:
+        thr_obj (Any): Value used by this routine.
+        thr_dir (Any): Directory path used by this operation.
+        pdb_dir (Any): Directory path used by this operation.
+        verbose (Any): Boolean flag controlling routine behavior.
+        dummy_dir (Any): Directory path used by this operation.
+        clean (Any): Boolean flag controlling routine behavior."""
     # get pdb_name and chain of the template#
     dna_sequence={}
     pdb_name, pdb_chain = thr_obj._pdb_name.lower(), thr_obj._pdb_chain
@@ -72,17 +93,32 @@ def  get_triads(thr_obj,thr_dir,pdb_dir,verbose=False,dummy_dir="/tmp"):
           raise ValueError("No structure reference\n")
        else:
           try:
-             triads_obj, pdb_obj, x3dna_obj = get_triads_from_template(template,verbose,dummy_dir)
+             if verbose: print("\t-- Get TRIADS of template",template)
+             triads_obj, pdb_obj, x3dna_obj = get_triads_from_template(template,verbose,dummy_dir,clean)
           except Exception as e:
              raise ValueError(e)
     else:
        try:
+             if verbose: print("\t-- Get TRIADS from folder",pdb_dir)
              triads_obj, pdb_obj, x3dna_obj =  get_triads_from_folder(thr_obj,pdb_dir)
        except Exception as e:
              raise ValueError(e)
     return triads_obj, pdb_obj, x3dna_obj
 
 def  get_triads_from_folder(thr_obj,pdb_dir):
+    """
+        Load template triads and structural context from prepared PDB folders.
+    
+        Args:
+            thr_obj (Threaded): Parsed threading object.
+            pdb_dir (str): PDB resources directory.
+    
+        Returns:
+            tuple: `(triads_obj, pdb_obj, x3dna_obj)`.
+    
+    Args:
+        thr_obj (Any): Value used by this routine.
+        pdb_dir (Any): Directory path used by this operation."""
     # get pdb_name and chain of the template#
     dna_sequence={}
     pdb_name, pdb_chain = thr_obj._pdb_name.lower(), thr_obj._pdb_chain
@@ -132,12 +168,29 @@ def  get_triads_from_folder(thr_obj,pdb_dir):
 
     return triads_obj, pdb_obj, x3dna_obj
 
-def get_triads_from_template(template,verbose,dummy_dir):
+def get_triads_from_template(template,verbose,dummy_dir,clean=False):
+    """
+        Compute triads directly from a template PDB file.
+    
+        Args:
+            template (str): Template PDB path.
+            verbose (bool): Enable verbose logs.
+            dummy_dir (str): Temporary directory root.
+            clean (bool, optional): Clean PDB before processing.
+    
+        Returns:
+            tuple: `(triads_obj, pdb_obj, x3dna_obj)`.
+    
+    Args:
+        template (Any): Value used by this routine.
+        verbose (Any): Boolean flag controlling routine behavior.
+        dummy_dir (Any): Directory path used by this operation.
+        clean (Any): Boolean flag controlling routine behavior."""
 
     # Get PDB object #
     if verbose: sys.stdout.write("\t-- Reading PDB file %s ...\n"%(os.path.basename(template)))
     pdb_obj = PDB(template)
-    pdb_obj.clean()
+    if clean: pdb_obj.clean()
     dummy_pdb=os.path.join(dummy_dir,os.path.basename(template))
     if not os.path.exists(dummy_pdb):
        pdb_obj.write(dummy_pdb)
@@ -159,12 +212,25 @@ def get_triads_from_template(template,verbose,dummy_dir):
 
     # Get triads object #
     triads_obj = triads.get_triads_obj(pdb_obj, dssp_obj, x3dna_obj, contacts_obj)
-
+    
 
     return triads_obj, pdb_obj, x3dna_obj
 
 
 def thread_kmer_triads(kmer,triads_obj):
+    """
+        Thread one k-mer sequence onto an input triads object.
+    
+        Args:
+            kmer (str): DNA k-mer sequence.
+            triads_obj (Triads): Input triads object.
+    
+        Returns:
+            Triads: Triads object updated for the threaded k-mer.
+    
+    Args:
+        kmer (Any): Value used by this routine.
+        triads_obj (Any): Triad object/data used for interaction modeling."""
     # Initialize #
     full_dna_seq = list(it.islice(kmer,0,None))
     full_dna_pos = list(range(1,len(full_dna_seq)+1))
@@ -210,7 +276,28 @@ def thread_kmer_triads(kmer,triads_obj):
     return thread_triads_obj
 
 
-def threading_triads(threading_file, pdb_dir=None,  template=None, verbose=True, dummy_dir="/tmp"):
+def threading_triads(threading_file, pdb_dir=None,  template=None, verbose=True, dummy_dir="/tmp",clean=False):
+    """
+        Build threaded triads from one threading file and template context.
+    
+        Args:
+            threading_file (str): Threading file path.
+            pdb_dir (str, optional): PDB resources directory.
+            template (str, optional): Explicit template PDB path override.
+            verbose (bool, optional): Enable verbose logs.
+            dummy_dir (str, optional): Temporary directory root.
+            clean (bool, optional): Clean PDB before triad derivation.
+    
+        Returns:
+            tuple: `(thread_triads_obj, pdb_obj, x3dna_obj)`.
+    
+    Args:
+        threading_file (Any): Path to the input/output file.
+        pdb_dir (Any): Directory path used by this operation.
+        template (Any): Value used by this routine.
+        verbose (Any): Boolean flag controlling routine behavior.
+        dummy_dir (Any): Directory path used by this operation.
+        clean (Any): Boolean flag controlling routine behavior."""
     thr_dir = os.path.dirname(threading_file)
     thr_obj = threader.Threaded(threading_file=threading_file)
     # add threading data to object #
@@ -225,13 +312,13 @@ def threading_triads(threading_file, pdb_dir=None,  template=None, verbose=True,
     #if template is None, use pdb_dir
     if template is None:
        try:
-         triads_obj, pdb_obj, x3dna_obj  = get_triads(thr_obj,thr_dir,pdb_dir,verbose,dummy_dir)
+         triads_obj, pdb_obj, x3dna_obj  = get_triads(thr_obj,thr_dir,pdb_dir,verbose,dummy_dir,clean)
        except ValueError as e:
          if verbose: sys.stderr.write("Failed get triads from folder %s\n"%e)
          exit(0)
     else:
        try:
-         triads_obj, pdb_obj, x3dna_obj  = get_triads_from_template(os.path.abspath(template),verbose,dummy_dir)
+         triads_obj, pdb_obj, x3dna_obj  = get_triads_from_template(os.path.abspath(template),verbose,dummy_dir,clean)
        except ValueError as e:
          if verbose: sys.stderr.write("Failed get triads from template %s\n"%e)
          exit(0)
@@ -307,6 +394,7 @@ def threading_triads(threading_file, pdb_dir=None,  template=None, verbose=True,
                             dinucleotide_environment[1] = "".join(nitrogenous_bases[nucleotide] for nucleotide in dinucleotide_environment[0])
                             triad_obj._A_environment,triad_obj._B_environment = "-".join(aminoacid_environment), "-".join(dinucleotide_environment)
                             thread_triads_obj.add_triad(triad_obj)
+                            #print("Add triad",triad_obj.return_as_string())
 
                 # Reverse strand #
                 if dinucleotide_environment[2] == 'R':
@@ -338,16 +426,44 @@ def threading_triads(threading_file, pdb_dir=None,  template=None, verbose=True,
                             dinucleotide_environment[1] = "".join(nitrogenous_bases[nucleotide] for nucleotide in dinucleotide_environment[0])
                             triad_obj._A_environment,triad_obj._B_environment = "-".join(aminoacid_environment), "-".join(dinucleotide_environment)
                             thread_triads_obj.add_triad(triad_obj)
+                            #print("Add triad",triad_obj.return_as_string())
     return thread_triads_obj, pdb_obj, x3dna_obj
 
 
 def parse_options():
-    parser = optparse.OptionParser("threading_to_triads.py --threading <input_file>")
+    """
+    Parse command-line options for threading-to-triads conversion.
+
+    How to run:
+        python threading_to_triads.py --threading THREAD_FILE
+            [-o OUTPUT_TRIADS --pdb PDB_DIR | --template TEMPLATE_PDB]
+            [--dummy DUMMY_DIR --clean -v]
+
+    Example:
+        python threading_to_triads.py --threading sample_thread.txt --pdb pdb_data -o threaded_triads.dat -v
+
+    The parser configures:
+        - Threading input file (`--threading`) and output triads file (`-o`).
+        - Structural context source (`--pdb` folder or `--template` file).
+        - Runtime controls (`--dummy`, `--clean`, `--verbose`).
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for threading/paths/output.
+    """
+    parser = optparse.OptionParser(
+        "python threading_to_triads.py --threading THREAD_FILE "
+        "[-o OUTPUT_TRIADS --pdb PDB_DIR | --template TEMPLATE_PDB] "
+        "[--dummy DUMMY_DIR --clean -v]"
+    )
     parser.add_option("--threading", action="store", type="string", dest="threading_file",  default=None, help="path to threading file", metavar="THREADING_FILE")
     parser.add_option("-o", default="threaded_triads.dat", action="store", type="string", dest="output", help="Output file (default = threaded_triad.dat)", metavar="{file}")
     parser.add_option("--pdb", action="store", type="string", default="pdb", dest="pdb_dir", help="PDB directory (i.e. output dir from pdb.py)", metavar="{directory}")
     parser.add_option("--template", action="store", type="string",  default=None, dest="template", help="Template PDB file", metavar="{file}")
     parser.add_option("--dummy", action="store", type="string",  default="/tmp", dest="dummy_dir", help="Dummy directory (default is /tmp)", metavar="{directory}")
+    parser.add_option("-c","--clean",default=False, action="store_true", dest="clean", help="Clean mode to restart the PDB numbering (default = False)")
     parser.add_option("-v","--verbose",default=False, action="store_true", dest="verbose", help="Verbose mode (default = False)")
 
 
@@ -355,7 +471,23 @@ def parse_options():
     (options, args) = parser.parse_args()
     return options
 
-if __name__ == "__main__":
+def main():
+    """
+    Run the threading-to-triads conversion workflow.
+
+    Workflow:
+        1. Parse command-line options and prepare temporary directories.
+        2. Load threading data and resolve structural context from PDB/template input.
+        3. Build threaded triads consistent with threaded protein and DNA mappings.
+        4. Write the resulting triads file.
+        5. Remove temporary files.
+
+    Args:
+        None.
+
+    Returns:
+        None. The threaded triads file is written to disk.
+    """
 
     # Arguments & Options #
     options  = parse_options()
@@ -363,9 +495,14 @@ if __name__ == "__main__":
     pdb_dir= options.pdb_dir
     template = options.template
     verbose = options.verbose
+    clean = options.clean
     if not os.path.exists(dummy_dir): os.makedirs(dummy_dir)
     threading_file = options.threading_file
-    triad_obj, pdb_obj, x3dna_obj = threading_triads(threading_file, pdb_dir,  template , verbose , dummy_dir)
+    triad_obj, pdb_obj, x3dna_obj = threading_triads(threading_file, pdb_dir,  template , verbose , dummy_dir,clean)
     # create the threaded object and get the threading file #
     triad_obj.write(options.output)
     shutil.rmtree(dummy_dir)
+
+
+if __name__ == "__main__":
+    main()

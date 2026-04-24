@@ -38,11 +38,33 @@ from ModCRElib.structure.contacts import contacts
 
 class Interface(object):
     """
-    This class defines an {Interface} object.
+    Store and summarize protein-DNA interface contacts by basepair.
 
+    Interface counts are derived from `contacts.Contact` objects, which are
+    built from SBILib atom/residue structures and optionally reloaded from the
+    serialized contacts format produced by `contacts.py`.
+
+    Object features:
+        - Stores basepair-level counters in `_interface`.
+        - Tracks per-basepair totals and contact classes (`hbonds`, `sbridges`,
+          `chbonds`, `vwaals`, `backbone`, `nucleobase`).
+        - Provides span/overlap utilities (`get_interface_start/end/length`,
+          `get_interface_overlap`).
+        - Supports serialization/deserialization of interface tables.
     """
 
     def __init__(self, file_name=None):
+        """
+                Initialize an interface container.
+        
+                Args:
+                    file_name (str, optional): Path to a serialized interface file.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         self._file = file_name
         self._interface = {}
         # Initialize #
@@ -50,6 +72,22 @@ class Interface(object):
             self._parse_file()
 
     def _parse_file(self):
+        """
+        Parse serialized interface rows (`basepair` contact counters) from file.
+
+        Expected format:
+            - Optional header/comment lines starting with `#`.
+            - One row per basepair with eight `;`-separated fields:
+              `basepair;contacts;hbonds;chbonds;sbridges;vwaals;backbone;nucleobase`.
+            - Counter semantics match classifications computed from SBILib-based
+              contact objects in `contacts.py`.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         for line in functions.parse_file(self._file):
             if line.startswith("#"): continue
             basepair, contacts, hbonds, chbonds, sbridges, vwaals, backbone, nucleobase = line.split(";")
@@ -57,14 +95,18 @@ class Interface(object):
 
     def add_basepair_contact(self, basepair, contact_obj=None):
         """
-        This function assigns a contact to a basepair in the protein-DNA
-        interface.
-
-        @input:
-        basepair {int}
-        contact_obj {Contact}
-
-        """
+                Assign one contact to a basepair entry in the interface table.
+        
+                Args:
+                    basepair (int): Basepair index.
+                    contact_obj (Contact, optional): Contact object to accumulate.
+        
+                Returns:
+                    None.
+        
+        Args:
+            basepair (Any): Value used by this routine.
+            contact_obj (Any): Contact object/data used by this routine."""
         # Initialize #
         self._interface.setdefault(basepair, {'contacts': 0, 'hbonds': 0, 'chbonds': 0, 'sbridges': 0, 'vwaals': 0, 'backbone': 0, 'nucleobase': 0})
 
@@ -93,15 +135,22 @@ class Interface(object):
                         self._interface[basepair]['nucleobase'] += 1
 
     def has_basepair(self, basepair):
+        """Return whether a basepair exists in the interface map.
+        
+        Args:
+            basepair (Any): Value used by this routine."""
         return basepair in self._interface
 
     def get_interface(self):
+        """Return the full interface dictionary."""
         return self._interface
 
     def get_start(self):
+        """Return the first contacted basepair index."""
         return self.get_interface_start()
 
     def get_interface_start(self):
+        """Return the first basepair with at least one contact."""
         for basepair in sorted(self._interface):
             if self._interface[basepair]['contacts'] > 0:
                 return basepair
@@ -109,9 +158,11 @@ class Interface(object):
         return None
 
     def get_end(self):
+        """Return the last contacted basepair index."""
         return self.get_interface_end()
 
     def get_interface_end(self):
+        """Return the last basepair with at least one contact."""
         end = None
 
         for basepair in sorted(self._interface):
@@ -121,16 +172,22 @@ class Interface(object):
         return end
 
     def get_interface_length(self):
+        """Return the interface span length in basepairs."""
         if self.get_interface_basepairs() is not None: return len(self.get_interface_basepairs())
         else: return 0
 
     def get_basepair_contacts(self, basepair):
+        """Return contact counters for one basepair.
+        
+        Args:
+            basepair (Any): Value used by this routine."""
         if self.has_basepair(basepair):
             return self._interface[basepair]
 
         return None
 
     def get_interface_basepairs(self):
+        """Return all basepairs between interface start and end."""
         if self.get_interface_start() is not None and self.get_interface_end() is not None:
             return list(range(self.get_interface_start(), self.get_interface_end() + 1))
 
@@ -138,19 +195,36 @@ class Interface(object):
 
     def get_interface_overlap(self, interface_obj):
         """
-        This function calculates returns the overlap between two
-        {Interface objects.
-
-        @input:
-        interface_obj {int}
+                Calculate overlap between two interface objects.
         
-        @return: {set}
-
-        """
+                Args:
+                    interface_obj (Interface): Interface object to compare with.
+        
+                Returns:
+                    set: Overlapping basepair indices.
+        
+        Args:
+            interface_obj (Any): Interface descriptor or interface-related data."""
         
         return set(self.get_interface_basepairs()).intersection(interface_obj.get_interface_basepairs()) 
 
     def write(self, file_name):
+        """
+                Write the interface table in the canonical serialized format.
+        
+                Output format:
+                    - Header: `#basepair;contacts;hbonds;chbonds;sbridges;vwaals;backbone;nucleobase`.
+                    - One semicolon-delimited row per basepair.
+                    - Values are aggregate counters computed from SBILib-derived contacts.
+        
+                Args:
+                    file_name (str): Output file path.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         # Initialize #
         done = set()
         functions.write(file_name, "#basepair;contacts;hbonds;chbonds;sbridges;vwaals;backbone;nucleobase")
@@ -159,6 +233,17 @@ class Interface(object):
             functions.write(file_name, self.return_as_string(basepair))
 
     def return_as_string(self, basepair):
+        """
+                Serialize one basepair interface row as delimited text.
+        
+                Args:
+                    basepair (int): Basepair index.
+        
+                Returns:
+                    str: Delimited interface row.
+        
+        Args:
+            basepair (Any): Value used by this routine."""
         # Initialize #
         contacts = self._interface[basepair]['contacts']
         hbonds = self._interface[basepair]['hbonds']
@@ -176,12 +261,16 @@ class Interface(object):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for interface extraction.
 
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for interface generation.
     """
 
-    parser = optparse.OptionParser("python interface.py -i input_file [-d distance_type --dummy=dummy_dir -o output_file]")
+    parser = optparse.OptionParser("python interface.py -i INPUT_FILE [-d DISTANCE_TYPE --dummy DUMMY_DIR -o OUTPUT_FILE]")
 
     parser.add_option("-d", default="basepairs", action="store", type="string", dest="distance_type", help="Distance type (i.e. \"basepairs\", \"dinucleotides\" or \"mindist\"; default = dinucleotides)", metavar="{string}")
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
@@ -199,20 +288,22 @@ def parse_options():
 
 def get_interface_obj(pdb_obj, x3dna_obj, contacts_obj, dummy_dir="/tmp"):
     """
-    This function calculates the protein-DNA interface of a interface of a complex
-    from a series of provided contacts and returns an {Interface} object.
-
-    @input:
-    pdb_obj {PDB}
-    x3dna_obj {X3DNA}
-    contacts_obj {Contacts}
-    distance_type {string} either "basepairs", "dinucleotides" or "mindist"
-    dummy_dir {string}
-
-    @return:
-    interface_obj {Contacts}
-
-    """
+        Compute protein-DNA interface counters from a contact set.
+    
+        Args:
+            pdb_obj (PDB): Input PDB structure object.
+            x3dna_obj (X3DNA): DNA-annotation object.
+            contacts_obj (Contacts): Precomputed contacts object.
+            dummy_dir (str, optional): Reserved temporary directory argument.
+    
+        Returns:
+            Interface: Computed interface object.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        x3dna_obj (Any): DNA identifier, sequence, or DNA-related data.
+        contacts_obj (Any): Contact object/data used by this routine.
+        dummy_dir (Any): Directory path used by this operation."""
 
     # Initialize #
     done = set() # Removes redundant contacts from interface
@@ -278,6 +369,15 @@ def get_interface_obj(pdb_obj, x3dna_obj, contacts_obj, dummy_dir="/tmp"):
 #-------------#
 
 if __name__ == "__main__":
+    """
+    Run the command-line interface extraction workflow.
+
+    Args:
+        None.
+
+    Returns:
+        None. Interface/contact/x3dna outputs are written to disk or stdout.
+    """
 
     # Arguments & Options #
     options = parse_options()

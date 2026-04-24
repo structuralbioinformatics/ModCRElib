@@ -35,11 +35,33 @@ from ModCRElib.beans import functions
 
 class X3DNA(object):
     """
-    This class defines a {X3DNA} object.
+    Parse and store basepair, helix, and dinucleotide annotations from X3DNA.
 
+    Object features:
+        - Preserves raw X3DNA output lines in `_file_content`.
+        - Stores forward-strand sequence in `_sequence`.
+        - Tracks residue-to-basepair assignments in `_residues`.
+        - Stores basepair definitions in `_basepairs` as paired strand residues.
+        - Stores contiguous dinucleotide windows in `_dinucleotides`, plus
+          reverse lookup in `_inverse_dinucleotides`.
+        - Stores helix-to-basepair assignments in `_helix` and derived helix
+          dinucleotide indices in `_helix_dinucleotides`.
+        - Exposes query helpers for residue/basepair/dinucleotide/helix
+          membership and retrieval, including sequence slicing by basepair range.
     """
 
     def __init__(self, file_name):
+        """
+                Initialize an X3DNA container from a `find_pair` output file.
+        
+                Args:
+                    file_name (str): Path to the X3DNA output file.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         self._file = file_name
         self._file_content = []
         self._sequence = ""
@@ -55,6 +77,7 @@ class X3DNA(object):
         self._initialize_helix_dinucleotides()
 
     def _parse_file(self):
+        """Parse basepairs/helices and cache raw output lines."""
         for line in functions.parse_file(self._file):
             # Get base-pair residues #
             m = re.search("(\d+)\s+\S\s\S{4}>(\S):\D*(\d+)_:\[\S{3}\](\w)\S{5}\w\[\S{3}\]:\D*(\d+)_:(\S)<\S{4}", line)
@@ -80,6 +103,7 @@ class X3DNA(object):
             
 
     def _initialize_dinucleotides(self):
+        """Initialize consecutive basepair windows as dinucleotides."""
         basepairs = [key for key in sorted(self._basepairs.keys())]
         while len(basepairs) > 1:
             i = basepairs.pop(0)
@@ -88,6 +112,7 @@ class X3DNA(object):
             self._inverse_dinucleotides.setdefault((i, basepairs[0]),i)
 
     def _initialize_helix_dinucleotides(self):
+        """Map helix identifiers to their constituent dinucleotide starts."""
         for helix in self._helix:
             self._helix_dinucleotides.setdefault(helix, [])
             basepairs = copy.copy(self.get_helix_basepairs(helix))
@@ -97,72 +122,129 @@ class X3DNA(object):
                 self._helix_dinucleotides[helix].append(i)
 
     def has_residue(self, pdb_chain, residue_num):
+        """Return whether a residue is mapped to a basepair.
+        
+        Args:
+            pdb_chain (Any): PDB structure identifier and chain selector.
+            residue_num (Any): Numeric identifier/index used by this routine."""
         return (pdb_chain, residue_num) in self._residues
 
     def has_basepair(self, basepair):
+        """Return whether a basepair index exists.
+        
+        Args:
+            basepair (Any): Value used by this routine."""
         return basepair in self._basepairs
 
     def has_dinucleotide(self, dinucleotide):
+        """Return whether a dinucleotide index exists.
+        
+        Args:
+            dinucleotide (Any): Value used by this routine."""
         return dinucleotide in self._dinucleotides
 
     def has_helix(self, helix):
+        """Return whether a DNA helix identifier exists.
+        
+        Args:
+            helix (Any): Value used by this routine."""
         return helix in self._helix
 
     def helix_has_residue(self, helix, pdb_chain, residue_num):
+        """Return whether a residue belongs to a specific helix.
+        
+        Args:
+            helix (Any): Value used by this routine.
+            pdb_chain (Any): PDB structure identifier and chain selector.
+            residue_num (Any): Numeric identifier/index used by this routine."""
         if self.has_residue(pdb_chain, residue_num) and self.has_helix(helix):
             return self._residues[(pdb_chain, residue_num)] in self.get_helix_basepairs(helix)
 
         return False
 
     def get_residue_basepair(self, pdb_chain, residue_num):
+        """Return basepair index assigned to a residue.
+        
+        Args:
+            pdb_chain (Any): PDB structure identifier and chain selector.
+            residue_num (Any): Numeric identifier/index used by this routine."""
         if self.has_residue(pdb_chain, residue_num):
             return copy.copy(self._residues[(pdb_chain, residue_num)])
 
         return None
 
     def get_basepair(self, basepair):
+        """Return residue tuples that define one basepair.
+        
+        Args:
+            basepair (Any): Value used by this routine."""
         if self.has_basepair(basepair):
             return copy.copy(self._basepairs[basepair])
 
         return None
 
     def get_basepairs(self):
+        """Return all basepair mappings."""
         return copy.copy(self._basepairs)
 
     def get_helix_basepairs(self, helix):
+        """Return ordered basepairs assigned to one helix.
+        
+        Args:
+            helix (Any): Value used by this routine."""
         if self.has_helix(helix):
             return copy.copy(self._helix[helix])
 
         return None
 
     def get_dinucleotide(self, dinucleotide):
+        """Return the basepair pair represented by one dinucleotide index.
+        
+        Args:
+            dinucleotide (Any): Value used by this routine."""
         if self.has_dinucleotide(dinucleotide):
             return copy.copy(self._dinucleotides[dinucleotide])
 
         return None
   
     def get_inverse_dinucleotide(self, basepair_1, basepair_2):
+        """Return dinucleotide index for a basepair pair.
+        
+        Args:
+            basepair_1 (Any): Value used by this routine.
+            basepair_2 (Any): Value used by this routine."""
         if (basepair_1,basepair_2) in self._inverse_dinucleotides:
            return copy.copy(self._inverse_dinucleotides[(basepair_1,basepair_2)])
         return None
  
     def get_sequence(self):
+        """Return forward-strand sequence parsed from X3DNA output."""
         return copy.copy(self._sequence)
 
     def get_dinucleotides(self):
+        """Return all dinucleotide mappings."""
         return copy.copy(self._dinucleotides)
 
     def get_inverse_dinucleotides(self):
+        """Return reverse mapping from basepair pairs to dinucleotide index."""
         return copy.copy(self._inverse_dinucleotides)
 
 
     def get_helix_dinucleotides(self, helix):
+        """Return dinucleotide indices that belong to a helix.
+        
+        Args:
+            helix (Any): Value used by this routine."""
         if self.has_helix(helix):
             return copy.copy(self._helix_dinucleotides[helix])
 
         return None
 
     def get_basepair_dinucleotides(self, basepair):
+        """Return dinucleotide indices that include a given basepair.
+        
+        Args:
+            basepair (Any): Value used by this routine."""
         dinucleotides = []
 
         for dinucleotide in self.get_dinucleotides():
@@ -172,6 +254,10 @@ class X3DNA(object):
         return copy.copy(dinucleotides)
 
     def get_basepair_helix(self, basepair):
+        """Return helix identifier that contains a basepair.
+        
+        Args:
+            basepair (Any): Value used by this routine."""
         if self.has_basepair(basepair):
             for helix in self._helix:
                 if basepair in self.get_helix_basepairs(helix):
@@ -180,15 +266,25 @@ class X3DNA(object):
         return None
 
     def get_dna_helices(self):
+        """Return all parsed DNA helices."""
         return copy.copy(self._helix)
 
     def get_nucleotide_sequence(self, A, B):
+        """Return sequence segment between basepair indices `A` and `B`.
+        
+        Args:
+            A (Any): Value used by this routine.
+            B (Any): Value used by this routine."""
         if self.has_basepair(A) and self.has_basepair(B):
             return self._sequence[A - 1:B]
 
         return None
 
     def write(self, file_name):
+        """Write cached raw X3DNA output lines to file.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         for line in self._file_content:
             functions.write(file_name, line)
 
@@ -198,8 +294,13 @@ class X3DNA(object):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for X3DNA annotation extraction.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for input, output, and dummy paths.
 
     """
 
@@ -218,16 +319,18 @@ def parse_options():
 
 def get_x3dna_obj(pdb_file, dummy_dir="/tmp"):
     """
-    This function executes "find_pair" from X3DNA package and returns a {X3DNA}.
-
-    @input:
-    pdb_file {string}
-    dummy_dir {string}
-
-    @return:
-    x3dna_obj {X3DNA}
-
-    """
+        Run X3DNA `find_pair` and parse its output into an `X3DNA` object.
+    
+        Args:
+            pdb_file (str): Input PDB file path.
+            dummy_dir (str, optional): Temporary working directory root.
+    
+        Returns:
+            X3DNA: Parsed X3DNA annotation object.
+    
+    Args:
+        pdb_file (Any): Path to the input/output file.
+        dummy_dir (Any): Directory path used by this operation."""
 
     try:
         # Initialize #
@@ -255,11 +358,21 @@ def get_x3dna_obj(pdb_file, dummy_dir="/tmp"):
 
     return x3dna_obj
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line X3DNA extraction workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options.
+        2. Run X3DNA `find_pair` on the input PDB.
+        3. Write raw X3DNA output to file or stdout.
+
+    Args:
+        None.
+
+    Returns:
+        None. X3DNA lines are written to file or stdout.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -273,3 +386,11 @@ if __name__ == "__main__":
     else:
         for line in x3dna_obj._file_content:
             sys.stdout.write("%s\n" % line)
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()

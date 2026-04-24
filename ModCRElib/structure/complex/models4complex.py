@@ -47,12 +47,17 @@ from SBILib.structure.atom import AtomOfNucleotide
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for renaming model files for complex building.
 
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options controlling input/output folders
+        and naming conventions.
     """
 
-    parser = optparse.OptionParser("python models4complex.py -i input_directory -o output_directory [--code pdb_code  --name name --start start --dummy=dummy_dir ] ")
+    parser = optparse.OptionParser("python models4complex.py -i INPUT_DIRECTORY -o OUTPUT_DIRECTORY [--code PDB_CODE --name NAME --start START --dummy DUMMY_DIR]")
 
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
     parser.add_option("-i", action="store", type="string", dest="input_folder", help="Input directory of models in PDB format (suffixed as pdb)", metavar="{directory}")
@@ -74,6 +79,19 @@ def parse_options():
 
 
 def features(pdb_file):
+    """
+        Extract chain and boundary metadata from one PDB model.
+    
+        Args:
+            pdb_file (str): Path to a PDB file.
+    
+        Returns:
+            tuple: `(chain, first, last, dna_size)` where `chain` is the protein
+            chain-id string, `first/last` are residue identifiers, and `dna_size`
+            is the maximum nucleotide-chain length.
+    
+    Args:
+        pdb_file (Any): Path to the input/output file."""
     pdb_obj=PDB(pdb_file)
     chain=""
     dna_size=0
@@ -90,12 +108,19 @@ def features(pdb_file):
 
     return chain,first,last,dna_size
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the model-renaming workflow used by `complexbuilder.py`.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse runtime options and collect input PDB models.
+        2. Extract chain/boundary metadata from each model.
+        3. Rewrite model names and optional chain-joined variants.
+        4. Save a table mapping original files to generated model names.
 
+    Returns:
+        None. Renamed model files are written to the output directory.
+    """
     # Arguments & Options #
     options   = parse_options()
     folder    = options.input_folder
@@ -182,5 +207,13 @@ if __name__ == "__main__":
         pdb_file = os.path.basename(models[i])
         fo.write("%d\t%s\t%s\n"%(i+1,pdb_file,correspondence[pdb_file]))
     fo.close()
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 
 

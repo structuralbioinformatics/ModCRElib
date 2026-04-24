@@ -1,3 +1,10 @@
+"""
+PDB sanitization helpers for ModCRE preprocessing.
+
+The script removes problematic/discontinuous DNA segments and overlapping
+nucleotide chains while preserving protein chains, then writes a cleaned PDB.
+"""
+
 import os, sys, re
 import configparser
 import optparse
@@ -33,9 +40,13 @@ from SBILib.structure.chain import ChainOfNucleotide
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI arguments for cleaning a PDB file.
 
+    How to run:
+        ``python clean.py -i input.pdb [--dummy /tmp -o clean.pdb]``
+
+    Returns:
+        optparse.Values: Namespace with ``input_file``, ``dummy_dir``, ``output_file``.
     """
 
     parser = optparse.OptionParser("python clean.py -i input_file [--dummy=dummy_dir -o output_file]")
@@ -53,16 +64,17 @@ def parse_options():
 
 def get_clean_pdb_obj(pdb_file, dummy_dir="/tmp"):
     """
-    This function executes cleans a PDB file from HETATMs, overlapped DNA
-    chains, etc., and returns a {PDB} object.
+    Load and sanitize a PDB structure for downstream DNA/protein workflows.
 
-    @input:
-    pdb_file {string}
-    dummy_dir {string}
+    Args:
+        pdb_file (str): Input structure file.
+        dummy_dir (str): Reserved for compatibility (unused in current body).
 
-    @return:
-    pdb_obj {PDB}
+    Returns:
+        PDB: Cleaned structure object.
 
+    Raises:
+        ValueError: If the input cannot be parsed or cleaned.
     """
 
     try:
@@ -77,15 +89,16 @@ def get_clean_pdb_obj(pdb_file, dummy_dir="/tmp"):
 
 def remove_discontinued_nucleotides_and_overlapped_chains(pdb_obj):
     """
-    This function removes discontinued {Nucleotide}s from {ChainOfNucleotide}
-    and any overlapped {ChainOfNucleotide}.
+    Keep protein chains and one non-overlapping continuous block per DNA chain.
 
-    @input:
-    pdb_obj {PDB}
+    DNA chains are split into continuous nucleotide blocks, ranked by block length,
+    and accepted if they do not geometrically overlap previously accepted residues.
 
-    @return:
-    clean_pdb_obj {PDB}
+    Args:
+        pdb_obj (PDB): Original structure.
 
+    Returns:
+        PDB: Sanitized structure preserving proteins and filtered DNA chains.
     """
 
     # Initialize #

@@ -54,7 +54,33 @@ from SBILib.structure import PDB
       
      
 def parse_user_arguments(*args, **kwds):
-    parser = argparse.ArgumentParser("pdb2thread ")
+    """
+        Parse command-line arguments for converting PDB complexes to thread files.
+    
+        How to run:
+            python pdb2thread.py -i INPUT_PDB [-o OUTPUT_PREFIX -s DNA_SEQUENCE --dummy DUMMY_DIR -v]
+    
+        Example:
+            python pdb2thread.py -i complex.pdb -o thread_out -s ACGTACGT -v
+    
+        The parser configures:
+            - Input complex PDB (`-i`) and optional output naming (`-o`).
+            - Optional DNA sequence override for interface threading (`-s`).
+            - Runtime options (`--dummy`, `-v`).
+    
+        Args:
+            *args: Unused positional passthrough.
+            **kwds: Unused keyword passthrough.
+    
+        Returns:
+            argparse.Namespace: Parsed command-line options.
+    
+    Args:
+        *args (Any): Value used by this routine.
+        **kwds (Any): Value used by this routine."""
+    parser = argparse.ArgumentParser(
+        usage="python pdb2thread.py -i INPUT_PDB [-o OUTPUT_PREFIX -s DNA_SEQUENCE --dummy DUMMY_DIR -v]"
+    )
     parser.add_argument("--dummy", default="/tmp/", action="store",  dest="dummy_dir", help="Dummy directory (default = /tmp/)") 
     parser.add_argument('-i', '--input_file', dest = 'input_file', action = 'store',
                         help = 'PDB file of TF with DNA')
@@ -72,6 +98,27 @@ def parse_user_arguments(*args, **kwds):
     return options
 
 def pdb2thread(pdb_obj,name,x3dna_obj,output_dir, dna = None,verbose=False):
+    """
+        Build `Threaded` objects from a PDB protein-DNA complex.
+    
+        Args:
+            pdb_obj (PDB): Input PDB complex object.
+            name (str): Base name used for threading/template files.
+            x3dna_obj (X3DNA): Parsed X3DNA annotation object.
+            output_dir (str): Output directory for template/thread files.
+            dna (str, optional): DNA sequence override for interface threading.
+            verbose (bool, optional): Enable verbose logs.
+    
+        Returns:
+            list: Generated `Threaded` objects (typically one per protein chain).
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        name (Any): Name/identifier used by this routine.
+        x3dna_obj (Any): DNA identifier, sequence, or DNA-related data.
+        output_dir (Any): Directory path used by this operation.
+        dna (Any): DNA identifier, sequence, or DNA-related data.
+        verbose (Any): Boolean flag controlling routine behavior."""
 
     protein_chains=set()
     dna_chains=set()
@@ -80,7 +127,6 @@ def pdb2thread(pdb_obj,name,x3dna_obj,output_dir, dna = None,verbose=False):
         chain=pdb_obj.get_chain_by_id(chain_id)
         if chain.chaintype=="P": protein_chains.add(chain_id)
         if chain.chaintype=="N": dna_chains.add(chain_id)
-
     # Get contacts object #
     if verbose: sys.stdout.write("Run PDB2THREAD ...\n")
     if verbose: sys.stdout.write("\t-- Get contacts ...\n")
@@ -90,7 +136,6 @@ def pdb2thread(pdb_obj,name,x3dna_obj,output_dir, dna = None,verbose=False):
             for dna_chain_id in dna_chains:
                 if (prot_chain_id in contact_obj._A_chain  and dna_chain_id in  contact_obj._B_chain):
                    paired.setdefault(prot_chain_id,(contact_obj._B_chain[0],contact_obj._B_chain[1]))
-                   
     thread_objs  = []
     for chain_id,(dna_id,dna_cmpl) in paired.items():
         if verbose: print(("\t-- Threaded object dummy %s, with chains %s (protein) and  %s (dna) named as %s ...."%(pdb_obj.id,chain_id,dna_id,name)))
@@ -149,7 +194,23 @@ def pdb2thread(pdb_obj,name,x3dna_obj,output_dir, dna = None,verbose=False):
 # Main        #
 #-------------#
 
-if __name__ == "__main__":
+def main():
+    """
+    Run the PDB-to-threading conversion workflow.
+
+    Workflow:
+        1. Parse command-line options and prepare temporary directories.
+        2. Load the input protein-DNA complex and derive X3DNA annotations.
+        3. Build per-chain `Threaded` objects from contacts and interface DNA.
+        4. Write template PDB files and threading output files.
+        5. Clean temporary files and finish execution.
+
+    Args:
+        None.
+
+    Returns:
+        None. Template and threading files are written to disk.
+    """
 
     # Arguments & Options #
     options      = parse_user_arguments()
@@ -243,4 +304,7 @@ if __name__ == "__main__":
        print("Remaining DUMMY files, not cleanded")
 
     if verbose: print("Done")
-    
+
+
+if __name__ == "__main__":
+    main()

@@ -41,12 +41,16 @@ from ModCRElib.structure.contacts import interface
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for binding-site sequence extraction.
 
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for PDB input, gap size, and output.
     """
 
-    parser = optparse.OptionParser("python get_BS_sequence.py -i input_file [-d distance_type --dummy=dummy_dir -o output_file]")
+    parser = optparse.OptionParser("python get_binding_site.py -i INPUT_FILE [-d DISTANCE_TYPE --dummy DUMMY_DIR -g GAP -o OUTPUT_FILE]")
 
     parser.add_option("-d", default="basepairs", action="store", type="string", dest="distance_type", help="Distance type (i.e. \"basepairs\", \"dinucleotides\" or \"mindist\"; default = dinucleotides)", metavar="{string}")
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
@@ -63,11 +67,22 @@ def parse_options():
 
     return options
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the binding-site sequence extraction workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line arguments.
+        2. Load structure, DNA annotations, contacts, and interface tables.
+        3. Merge nearby interface fragments and extract DNA sequences.
+        4. Write auxiliary outputs and extracted sequences.
+
+    Args:
+        None.
+
+    Returns:
+        None. Binding-site sequences and optional helper outputs are written.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -133,4 +148,12 @@ if __name__ == "__main__":
     else:
         for sequence in sequences:
             sys.stdout.write("%s\n"%sequence)
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 

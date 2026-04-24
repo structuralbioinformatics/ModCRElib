@@ -1,3 +1,10 @@
+"""
+Batch-convert a folder of mmCIF files into PDB files with optional renaming.
+
+Usage:
+    python mmcifs_to_pdbs.py INPUT_DIR OUTPUT_DIR [LABEL] [SPECIE]
+"""
+
 import sys,os
 import configparser
 

@@ -68,6 +68,26 @@ buried_b_strand_propensities_dict = {'V': 1.57, 'I': 1.39, 'L': 0.93, 'M': 0.84,
 ###############
 
 def get_patches(pdb_obj, contacts_obj, radius, fragment_restrict):
+    """
+        Build interface-centered amino-acid patches for each protein chain.
+    
+        Patches are assembled from residues that contact DNA and are mutually close
+        in 3D space, then expanded until a minimum patch size is reached.
+    
+        Args:
+            pdb_obj (PDB): Input protein-DNA structure.
+            contacts_obj (Contacts): Protein-DNA contacts object.
+            radius (float): Maximum protein-DNA contact distance considered.
+            fragment_restrict (dict or None): Optional per-chain residue intervals.
+    
+        Returns:
+            dict: Patch definitions keyed by protein chain.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        contacts_obj (Any): Contact object/data used by this routine.
+        radius (Any): Value used by this routine.
+        fragment_restrict (Any): Fragment identifier or fragment interval."""
     
     # Set the maximum distance between the residues that define the patch max-dictance between Aas
     distance_start = float(config.get("Parameters","aa_contact_in_patch"))
@@ -180,6 +200,49 @@ def get_patches(pdb_obj, contacts_obj, radius, fragment_restrict):
 
 
 def get_msa_obj(pdb_obj,dssp_obj, triads_obj, x3dna_obj, potentials, radius, fragment_restrict, binding_restrict, split_potential, patches,  seq_threshold=None, verbose=False, specificity=False,allowed_sequences=None,pssm=None):
+    """
+        Score sequence variants and build an MSA-like object of accepted designs.
+    
+        The function combines structural potentials, triad context, and optional
+        seqUNET/selection constraints to evaluate substitutions over interface
+        patches and produce sequence candidates.
+    
+        Args:
+            pdb_obj (PDB): Input protein-DNA structure.
+            dssp_obj (DSSP): DSSP secondary-structure annotations.
+            triads_obj (Triads): Protein-DNA triad descriptors.
+            x3dna_obj (X3DNA): DNA basepair/dinucleotide annotations.
+            potentials (dict): Statistical potentials by chain/family.
+            radius (float): Contact-distance cutoff for scoring.
+            fragment_restrict (dict or None): Optional protein residue intervals.
+            binding_restrict (list or None): Optional DNA binding-site intervals.
+            split_potential (str): Potential type to evaluate.
+            patches (dict): Patch definitions produced by `get_patches`.
+            seq_threshold (list, optional): Score thresholds for filtering.
+            verbose (bool, optional): Enable verbose logs.
+            specificity (bool, optional): Apply specificity-oriented normalization.
+            allowed_sequences (set/list, optional): Whitelist of allowed sequences.
+            pssm (dict, optional): Position-specific amino-acid prior probabilities.
+    
+        Returns:
+            PWM.nMSA: Sequence container with accepted designed variants.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        dssp_obj (Any): Value used by this routine.
+        triads_obj (Any): Triad object/data used for interaction modeling.
+        x3dna_obj (Any): DNA identifier, sequence, or DNA-related data.
+        potentials (Any): Value used by this routine.
+        radius (Any): Value used by this routine.
+        fragment_restrict (Any): Fragment identifier or fragment interval.
+        binding_restrict (Any): Value used by this routine.
+        split_potential (Any): Value used by this routine.
+        patches (Any): Value used by this routine.
+        seq_threshold (Any): Threshold value controlling filtering or acceptance.
+        verbose (Any): Boolean flag controlling routine behavior.
+        specificity (Any): Value used by this routine.
+        allowed_sequences (Any): Sequence/alignment content used in this step.
+        pssm (Any): Value used by this routine."""
 
     # Initialize #
     binding_sites = {}
@@ -282,8 +345,26 @@ def get_msa_obj(pdb_obj,dssp_obj, triads_obj, x3dna_obj, potentials, radius, fra
     return msa_full,msa_gapped,msa_short
 
 def accepted_sequences_pssm(csv_file,topunet,ratiounet):
-    '''
-    '''
+    """
+        Parse seqUNET predictions and build accepted substitutions per position.
+    
+        Reference:
+            Dunham AS, Beltrao P, AlQuraishi M. High-throughput deep learning
+            variant effect prediction with Sequence UNET. Genome Biology. 2023;
+            24:110. doi:10.1186/s13059-023-02948-3.
+    
+        Args:
+            csv_file (str): CSV path containing seqUNET residue probabilities.
+            topunet (int): Maximum number of amino acids kept per position.
+            ratiounet (float): Relative probability threshold against top residue.
+    
+        Returns:
+            dict: Mapping from residue index to accepted amino-acid list.
+    
+    Args:
+        csv_file (Any): Path to the input/output file.
+        topunet (Any): Value used by this routine.
+        ratiounet (Any): Ratio parameter controlling scaling or trimming."""
     import pandas as pd
     pssm=None
     try:
@@ -307,8 +388,19 @@ def accepted_sequences_pssm(csv_file,topunet,ratiounet):
     return pssm
 
 def helix_capping(dssp_obj,pdb_chain):
-    '''
-    '''
+    """
+        Detect helix-capping positions from DSSP secondary-structure annotation.
+    
+        Args:
+            dssp_obj (DSSP): DSSP object with residue secondary-structure labels.
+            pdb_chain (ChainOfProtein): Protein chain to analyze.
+    
+        Returns:
+            dict: Capping metadata keyed by residue index/identifier.
+    
+    Args:
+        dssp_obj (Any): Value used by this routine.
+        pdb_chain (Any): PDB structure identifier and chain selector."""
     number_of_helix=0
     in_helix=False
     helix={}
@@ -334,8 +426,21 @@ def helix_capping(dssp_obj,pdb_chain):
     return (n_capping,c_capping)
 
 def score_capping(aminoacid,residue_number,capping):
-    '''
-    '''
+    """
+        Compute capping contribution for one amino-acid substitution.
+    
+        Args:
+            aminoacid (str): One-letter amino-acid code.
+            residue_number (int): Sequence position evaluated.
+            capping (dict): Helix-capping annotation from `helix_capping`.
+    
+        Returns:
+            float: Capping score contribution.
+    
+    Args:
+        aminoacid (Any): Value used by this routine.
+        residue_number (Any): Value used by this routine.
+        capping (Any): Value used by this routine."""
     score=0
     n_capping,c_capping = capping
     #print(n_capping)
@@ -350,8 +455,37 @@ def score_capping(aminoacid,residue_number,capping):
     return score
 
 def get_residue_scores_and_binding_site(pdb_obj, dssp_obj, triads_obj, x3dna_obj, potentials, radius, fragment_restrict, binding_restrict, split_potential,pdb_chain,verbose):
-    '''
-    '''
+    """
+        Compute residue-level substitution scores and infer DNA binding positions.
+    
+        Args:
+            pdb_obj (PDB): Input protein-DNA structure.
+            dssp_obj (DSSP): DSSP secondary-structure annotations.
+            triads_obj (Triads): Protein-DNA triad descriptors.
+            x3dna_obj (X3DNA): DNA basepair/dinucleotide annotations.
+            potentials (dict): Statistical potentials by chain/family.
+            radius (float): Contact-distance cutoff for scoring.
+            fragment_restrict (dict or None): Optional protein residue intervals.
+            binding_restrict (list or None): Optional DNA binding-site intervals.
+            split_potential (str): Potential type to evaluate.
+            pdb_chain (str): Target protein chain identifier.
+            verbose (bool): Enable verbose logs.
+    
+        Returns:
+            tuple: Residue scores, structural features, and selected binding site.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        dssp_obj (Any): Value used by this routine.
+        triads_obj (Any): Triad object/data used for interaction modeling.
+        x3dna_obj (Any): DNA identifier, sequence, or DNA-related data.
+        potentials (Any): Value used by this routine.
+        radius (Any): Value used by this routine.
+        fragment_restrict (Any): Fragment identifier or fragment interval.
+        binding_restrict (Any): Value used by this routine.
+        split_potential (Any): Value used by this routine.
+        pdb_chain (Any): PDB structure identifier and chain selector.
+        verbose (Any): Boolean flag controlling routine behavior."""
     # Initialize #
     nucleotides = list("ACGT")
     # Get original DNA sequence indexes
@@ -449,8 +583,29 @@ def get_residue_scores_and_binding_site(pdb_obj, dssp_obj, triads_obj, x3dna_obj
     return residue_scores, binding_site, ss_exposure, native_aa_propensity, capping
 
 def zscore_by_dinucleotide(aa,a_oa_triad,b_ob_triad,potentials,chain,dab,split_potential):
-    '''
-    '''
+    """
+        Compute amino-acid Z-score contribution for one triad/dinucleotide context.
+    
+        Args:
+            aa (str): Candidate amino-acid single-letter code.
+            a_oa_triad (str): Amino-acid triad context key.
+            b_ob_triad (str): Dinucleotide triad context key.
+            potentials (dict): Statistical potentials dictionary.
+            chain (str): Protein chain identifier.
+            dab (float): Amino-acid to DNA distance bin.
+            split_potential (str): Potential variant to query.
+    
+        Returns:
+            float: Z-scored energetic contribution.
+    
+    Args:
+        aa (Any): Value used by this routine.
+        a_oa_triad (Any): Triad object/data used for interaction modeling.
+        b_ob_triad (Any): Triad object/data used for interaction modeling.
+        potentials (Any): Value used by this routine.
+        chain (Any): Chain identifier.
+        dab (Any): Value used by this routine.
+        split_potential (Any): Value used by this routine."""
     # Initialize #
     nucleotides = list("ACGT")
     scores_list=[]
@@ -526,6 +681,29 @@ def zscore_by_dinucleotide(aa,a_oa_triad,b_ob_triad,potentials,chain,dab,split_p
         
     
 def scale_all_patches_scores(all_patches_scores,ss_exposure,native_aa_propensity,capping,split_potential,threshold=None,apply_structure=True):
+    """
+        Rescale patch scores and optionally apply structural propensity weighting.
+    
+        Args:
+            all_patches_scores (dict): Raw patch scores by sequence/patch.
+            ss_exposure (dict): Secondary-structure and exposure annotations.
+            native_aa_propensity (dict): Native amino-acid propensities.
+            capping (dict): Helix-capping annotations.
+            split_potential (str): Potential type used for scoring.
+            threshold (float, optional): Optional minimum score filter.
+            apply_structure (bool, optional): Apply structure-based reweighting.
+    
+        Returns:
+            dict: Scaled patch scores.
+    
+    Args:
+        all_patches_scores (Any): Score/statistical value used by this routine.
+        ss_exposure (Any): Value used by this routine.
+        native_aa_propensity (Any): Value used by this routine.
+        capping (Any): Value used by this routine.
+        split_potential (Any): Value used by this routine.
+        threshold (Any): Threshold value controlling filtering or acceptance.
+        apply_structure (Any): Value used by this routine."""
     # Scale the SEQUENCES scores #
     max_scores = {}
     min_scores = {}
@@ -589,6 +767,27 @@ def scale_all_patches_scores(all_patches_scores,ss_exposure,native_aa_propensity
     return all_patches_scaled_scores
 
 def combine_patches(patches_scores,residue_scores,ss_exposure,  binding_site,verbose,specificity):
+    """
+        Merge compatible patch substitutions into full-sequence design candidates.
+    
+        Args:
+            patches_scores (dict): Scored substitutions per patch.
+            residue_scores (dict): Residue-level substitution scores.
+            ss_exposure (dict): Secondary-structure/exposure annotations.
+            binding_site (list): DNA-binding positions used for selection.
+            verbose (bool): Enable verbose logs.
+            specificity (bool): Apply specificity-aware selection adjustments.
+    
+        Returns:
+            dict: Combined sequence designs with aggregated scores.
+    
+    Args:
+        patches_scores (Any): Score/statistical value used by this routine.
+        residue_scores (Any): Score/statistical value used by this routine.
+        ss_exposure (Any): Value used by this routine.
+        binding_site (Any): Value used by this routine.
+        verbose (Any): Boolean flag controlling routine behavior.
+        specificity (Any): Value used by this routine."""
     # Initialize #
     aminoacids = list("ACDEFGHIKLMNPQRSTVWY")
 
@@ -797,6 +996,17 @@ def combine_patches(patches_scores,residue_scores,ss_exposure,  binding_site,ver
     return patches_combined
 
 def average_sigma(l):
+    """
+        Compute mean and standard deviation for a numeric list.
+    
+        Args:
+            l (list): Numeric values.
+    
+        Returns:
+            tuple: `(mean, sigma)` statistics.
+    
+    Args:
+        l (Any): Value used by this routine."""
     import math
     average=0.0
     sigma=0.0
@@ -807,7 +1017,44 @@ def average_sigma(l):
 
 def get_all_scaled_patches_scores(pdb_obj,pdb_chain,residue_scores, ss_exposure, native_aa_propensity, capping, patches, binding_site, split_potential, threshold=None, dummy_dir="/tmp",verbose=False,specificity=False,allowed_sequences=None,pssm=None):
     """
-    """
+        Generate, filter, and scale all candidate patch substitutions.
+    
+        Args:
+            pdb_obj (PDB): Input protein-DNA structure.
+            pdb_chain (str): Protein chain identifier.
+            residue_scores (dict): Residue-level substitution scores.
+            ss_exposure (dict): Secondary-structure/exposure annotations.
+            native_aa_propensity (dict): Native amino-acid propensities.
+            capping (dict): Helix-capping annotations.
+            patches (dict): Patch definitions for chain residues.
+            binding_site (list): DNA-binding positions used for selection.
+            split_potential (str): Potential type used for scoring.
+            threshold (float, optional): Score threshold for candidate retention.
+            dummy_dir (str, optional): Temporary directory root.
+            verbose (bool, optional): Enable verbose logs.
+            specificity (bool, optional): Apply specificity-aware filtering.
+            allowed_sequences (set/list, optional): External whitelist of sequences.
+            pssm (dict, optional): seqUNET-derived allowed substitutions per site.
+    
+        Returns:
+            dict: Scaled patch score candidates.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        pdb_chain (Any): PDB structure identifier and chain selector.
+        residue_scores (Any): Score/statistical value used by this routine.
+        ss_exposure (Any): Value used by this routine.
+        native_aa_propensity (Any): Value used by this routine.
+        capping (Any): Value used by this routine.
+        patches (Any): Value used by this routine.
+        binding_site (Any): Value used by this routine.
+        split_potential (Any): Value used by this routine.
+        threshold (Any): Threshold value controlling filtering or acceptance.
+        dummy_dir (Any): Directory path used by this operation.
+        verbose (Any): Boolean flag controlling routine behavior.
+        specificity (Any): Value used by this routine.
+        allowed_sequences (Any): Sequence/alignment content used in this step.
+        pssm (Any): Value used by this routine."""
     # Initialize #
     all_patches_scores = {}
     all_patches_scaled_scores = {}
@@ -968,6 +1215,21 @@ def get_all_scaled_patches_scores(pdb_obj,pdb_chain,residue_scores, ss_exposure,
     return all_sequence_patches_scaled_scores
 
 def filter_out_by_selection(all_patches_scaled_scores,binding_site,allowed_sequences):
+    """
+        Keep only candidates that match externally allowed interface sequences.
+    
+        Args:
+            all_patches_scaled_scores (dict): Candidate designs with scores.
+            binding_site (list): Interface residue positions.
+            allowed_sequences (set/list): Allowed interface sequence strings.
+    
+        Returns:
+            dict: Filtered candidate set.
+    
+    Args:
+        all_patches_scaled_scores (Any): Score/statistical value used by this routine.
+        binding_site (Any): Value used by this routine.
+        allowed_sequences (Any): Sequence/alignment content used in this step."""
 
     #Initialize
     all_sequence_patches_scaled_scores={}
@@ -1010,6 +1272,23 @@ def filter_out_by_selection(all_patches_scaled_scores,binding_site,allowed_seque
     return all_sequence_patches_scaled_scores
     
 def filter_out_by_PROSA(all_patches_scaled_scores,pdb_obj,pdb_chain,dummy="/tmp"):
+    """
+        Filter sequence candidates using PROSA-like structural plausibility checks.
+    
+        Args:
+            all_patches_scaled_scores (dict): Candidate designs with scores.
+            pdb_obj (PDB): Input structure object.
+            pdb_chain (str): Target protein chain identifier.
+            dummy (str, optional): Temporary directory root.
+    
+        Returns:
+            dict: Candidate designs that pass structural filtering.
+    
+    Args:
+        all_patches_scaled_scores (Any): Score/statistical value used by this routine.
+        pdb_obj (Any): PDB object or structure file input.
+        pdb_chain (Any): PDB structure identifier and chain selector.
+        dummy (Any): Value used by this routine."""
    
     #Initialize
     all_sequence_patches_scaled_scores={}
@@ -1083,7 +1362,7 @@ def filter_out_by_PROSA(all_patches_scaled_scores,pdb_obj,pdb_chain,dummy="/tmp"
         mutant_energy = 'm%s.ene.ana' %str(counter)
         diff_energy = 'diff.ene.ana'
         wt_ene_file = os.path.abspath(os.path.join(dummy_dir,wild_type_energy))
-        mt_ene_file = os.path.abspath(os.path.join(dummy_dir,wild_type_energy))
+        mt_ene_file = os.path.abspath(os.path.join(dummy_dir,mutant_energy))
         error_counter = 0
 
         try:
@@ -1099,14 +1378,15 @@ def filter_out_by_PROSA(all_patches_scaled_scores,pdb_obj,pdb_chain,dummy="/tmp"
           for linemt in mt_ene:
                     mt = linemt.rstrip('\n').lstrip(' ').split('   ')
                     pair_mt.setdefault(mt[0],float(mt[1]))
-          for reside in residue_idx:
-            if residue in pair_mt and residue in pair_wt:
-              if pair_mt.get(residue) > pair_wt.get(residue):
-                   if pair_mt.get(residue) > 0 and pair_wt.get(residue) < 0:
-                      if pair_mt.get(residue) > 1.00:
+          for residue in residues_idx:
+            residue_key = str(residue)
+            if residue_key in pair_mt and residue_key in pair_wt:
+              if pair_mt.get(residue_key) > pair_wt.get(residue_key):
+                   if pair_mt.get(residue_key) > 0 and pair_wt.get(residue_key) < 0:
+                      if pair_mt.get(residue_key) > 1.00:
                         error_counter += 1
                    else:
-                      diff = (pair_mt.get(residue)/pair_wt.get(residue))
+                      diff = (pair_mt.get(residue_key)/pair_wt.get(residue_key))
                       if diff > 2:
                          error_counter += 1
         except:
@@ -1127,18 +1407,24 @@ def filter_out_by_PROSA(all_patches_scaled_scores,pdb_obj,pdb_chain,dummy="/tmp"
 
 def scale(score, max_score, min_score, max_scaled_score=1.0, min_scaled_score=0.0):
   """
-  This function scales a score in a range x0..x1 to a new range y0..y1:
-
-  @input:
-  score {float}
-  max_score {float}
-  min_score {float}
-  max_scaled_score {float}
-  min_scaled_score {float}
-
-  @return {float}
+    Linearly map a value from one numeric range into another.
   
-  """
+    Args:
+        score (float): Value to scale.
+        max_score (float): Source-range maximum.
+        min_score (float): Source-range minimum.
+        max_scaled_score (float, optional): Target-range maximum.
+        min_scaled_score (float, optional): Target-range minimum.
+  
+    Returns:
+        float: Scaled value in the target range.
+  
+  Args:
+      score (Any): Score/statistical value used by this routine.
+      max_score (Any): Score/statistical value used by this routine.
+      min_score (Any): Score/statistical value used by this routine.
+      max_scaled_score (Any): Score/statistical value used by this routine.
+      min_scaled_score (Any): Score/statistical value used by this routine."""
   if (max_score - min_score) != 0.0:
     return min_scaled_score + (max_scaled_score - min_scaled_score) * (score - min_score) / (max_score - min_score)
   else:
@@ -1146,9 +1432,20 @@ def scale(score, max_score, min_score, max_scaled_score=1.0, min_scaled_score=0.
 
 
 def parse_options():
-    '''
-    This function parses the command line arguemnts and returns an optparse object
-    '''
+    """
+    Parse command-line options for TF sequence-design scoring.
+
+    Note:
+        This workflow can use AI-derived sequence priors (seqUNET). The neural
+        network model and/or its predictions must be downloaded/generated
+        separately before running this script.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for inputs, potentials, and filters.
+    """
     parser = optparse.OptionParser('python TF_design.py -i input_pdb_file --pbm=pbm_dir --pdb=pdb_dir [-o output_file ] [-a -f -p --taylor -s potential -b -t -k -r --fragment a_A-b_A;c_B-d_B --binding a-b;c-d  --first_threshold 0.95 --second_threshold 0.95 --radius  0.0 -v ]')
 
     parser.add_option('--dummy', default='/tmp/', action='store', type='string', dest='dummy_dir', help='Dummy directory (default = /tmp/', metavar='{directory}')
@@ -1162,7 +1459,7 @@ def parse_options():
     parser.add_option("--fragment", default=None, action="store", type="string", dest="fragment_restrict", help="Fragment of protein to apply the potential. Format is 'a_A-b_A;c_B-d_B': two regions between residues a-b and c-d from chain A and B. (Default is None it applies to all amino-acids)")
     parser.add_option("--binding", default=None, action="store", type="string", dest="binding_restrict", help="Binding site of DNA to apply the potential. Format is 'a-b;c-d': two regions between residues a-b and c-d of the forward chain (first in PDB). (Default is None it applies to all nucleotides)")
     parser.add_option("--sequences", default=None, action="store", type="string", dest="allowed_sequences" , help="File of interface sequences allowed. This reduces the number of accepted sequences. It forces to skip the structure control")
-    parser.add_option("--seqUNET", default=None, action="store", type="string", dest="sequnet" , help="CSV file output of sequence UNET with the predicted PSSM (this flag is mutually exclusive with flag --sequences file) ")
+    parser.add_option("--seqUNET", default=None, action="store", type="string", dest="sequnet" , help="CSV output from sequence UNET predicted PSSM; UNET model/predictions must be obtained separately (mutually exclusive with --sequences)")
     parser.add_option("--topUNET", default=5, action="store", type="int", dest="topunet" , help="Maximum number of accepted amino-acid substitutions per position ordered by the seqUNET file the (default is 5) ")
     parser.add_option("--ratioUNET", default=0.05, action="store", type="float", dest="ratiounet" , help="Maximum ratio of the highest of the maximum probability preserved, i.e if p/p_max < ratioUNET the Aa is accepted (default is 0.05) ")
 
@@ -1196,6 +1493,25 @@ def parse_options():
 ###############
 
 if __name__ == "__main__":
+    """
+    Run the command-line TF design and scoring workflow.
+
+    Workflow:
+        1. Parse command-line options and load structural resources.
+        2. Build DSSP, X3DNA, contacts, and triads objects.
+        3. Load statistical potentials and score sequence patches.
+        4. Filter and report design candidates.
+
+    Requirements:
+        AI-based sequence constraints (seqUNET) require external model assets
+        and/or precomputed predictions downloaded/generated outside this script.
+
+    Args:
+        None.
+
+    Returns:
+        None. Results are written to output files.
+    """
     # Arguments & Options #
     options = parse_options()
 
@@ -1210,7 +1526,7 @@ if __name__ == "__main__":
     pdb_dir=None
     if options.pdb_dir is not None: pdb_dir = os.path.abspath(options.pdb_dir)
     families = {}
-    if options.verbose:sys.stdout.write("\t-- Ouput will be found as %s ...\n"%(options.output_file))
+    if options.verbose:sys.stdout.write("\t-- Output will be found as %s ...\n"%(options.output_file))
     if options.verbose:sys.stdout.write("\t-- Check families...\n")
     if os.path.exists(os.path.join(options.pdb_dir, "families.txt")):
        for line in functions.parse_file(os.path.join(options.pdb_dir, "families.txt")):
@@ -1301,6 +1617,8 @@ if __name__ == "__main__":
        for line in allowed_file:
            if line.startswith("#"): continue
            data=line.strip().split()
+           if len(data) == 0:
+               continue
            set_of_sequences.add(data[0])
        if len(set_of_sequences)>0:
           allowed_sequences=set_of_sequences

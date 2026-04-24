@@ -1,3 +1,12 @@
+"""
+Split a long DNA sequence into windows and run `scan.py` over each fragment.
+
+This script orchestrates large-sequence scanning by fragmenting the input DNA,
+launching per-window scan jobs, and collecting their ortholog/template outputs
+into merged summary files. It can optionally continue with clustering nearby
+binding complexes after the window scans finish.
+"""
+
 import os, sys, re
 import configparser
 import json
@@ -7,9 +16,6 @@ import shutil
 import subprocess
 from time import time
 import pickle
-import pickle
-
-sys.stdout.reconfigure(line_buffering=True)
 
 # Get scripts path (i.e. ".") #
 exe_path = os.path.abspath(os.path.dirname(__file__))
@@ -58,11 +64,34 @@ python = os.path.join(config.get("Paths", "python_path"), "python")
 #-------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse the command line options for windowed DNA scanning.
 
-    parser = optparse.OptionParser("scan.py [--dummy=DUMMY_DIR] -i INPUT_FILE [-l LABEL -o OUTPUT_DIR] --pbm=PBM_dir --pdb=PDB_DIR -s SPECIE [-v]")
+    How to run:
+        python scanner.py [--dummy DUMMY_DIR] -i INPUT_FASTA
+            [--pbm PBM_DIR --pdb PDB_DIR -o OUTPUT_DIR -l LABEL]
+            [--parallel --complexes --reuse --rank -v]
+            [statistical potential options]
+
+    Example:
+        python scanner.py -i dna.fa --pbm pbm_data --pdb pdb_data
+            -o scan_out --parallel -v
+
+    The parser configures:
+        - Input DNA FASTA and PBM/PDB resources.
+        - Output naming, logging, and scan-family/species filters.
+        - Runtime controls (parallel execution, clustering, reuse, ranking).
+        - Statistical-potential controls used by downstream scoring.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options describing the input DNA, PBM/PDB
+        databases, output paths, fragment-scanning settings, and scoring options.
+    """
+
+    parser = optparse.OptionParser("scanner.py [--dummy=DUMMY_DIR] -i INPUT_FILE [-l LABEL -o OUTPUT_DIR] --pbm=PBM_DIR --pdb=PDB_DIR [-s SPECIE] [-v]")
 
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="DUMMY_DIR")
     parser.add_option("-i", action="store", type="string", dest="input_file", help="Input FASTA file", metavar="INPUT_FILE")
@@ -107,13 +136,19 @@ def parse_options():
 
     return options
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the windowed DNA-scanning workflow.
 
+    Workflow:
+        1. Split the input DNA sequence into overlapping windows.
+        2. Launch `scan.py` on each window, locally or through the queue.
+        3. Merge the per-window ortholog/template outputs.
+        4. Optionally cluster nearby binding complexes into larger TF clusters.
 
-if __name__ == "__main__":
-
+    Returns:
+        None. Output files and merged summaries are written to the chosen output directory.
+    """
     start_time = time()
     # Arguments & Options #
     options = parse_options()
@@ -170,6 +205,7 @@ if __name__ == "__main__":
     if input_file.endswith(".fa"):    extension = ".fa"
     if input_file.endswith(".fasta"): extension = ".fasta"
 
+    base_input_file = input_file[:-len(extension)] if input_file.endswith(extension) else input_file
     for i in range(number_of_fragments):
         start = max((end - overlap),0)
         if start >= len(dna_sequence):continue
@@ -178,7 +214,7 @@ if __name__ == "__main__":
         words_header[0] = words_header[0]+":"+str(i+1)+":"+str(start+1)+"-"+str(end)
         f_dna_header   = " ".join(words_header)
         f_dna_sequence = dna_sequence[start:end]
-        dna_file = input_file.rstrip(extension)+":"+str(i+1)+":"+str(start+1)+"-"+str(end)+extension
+        dna_file = base_input_file+":"+str(i+1)+":"+str(start+1)+"-"+str(end)+extension
         fo = open(dna_file,"w")
         fo.write(">%s\n%s\n"%(f_dna_header,f_dna_sequence))
         fo.close()
@@ -247,10 +283,10 @@ if __name__ == "__main__":
             if specie is not None:                parameters = parameters + " --specie "+ specie
             if label is not None:                 parameters = parameters + " -l " + label
 
+            program=os.path.join(exe_path,"scan.py")
             if parallel:
               if  config.get("Cluster", "cluster_queue") == "None": cluster_queue=None
               else: cluster_queue=config.get("Cluster", "cluster_queue")
-              program=os.path.join(exe_path,"scan.py")
               python = os.path.join(config.get("Paths", "python_path"), "python")
               if verbose: print(("\t-- Submit  %s %s" % (program,parameters)))
               functions.submit_command_to_queue("%s %s %s" % (python,program,parameters), cluster_queue, int(config.get("Cluster", "max_jobs_in_queue")),os.path.join(scripts_path,config.get("Cluster","command_queue")),options.dummy_dir,config.get("Cluster","cluster_submit"),config.get("Cluster","cluster_qstat"))
@@ -431,9 +467,14 @@ if __name__ == "__main__":
         if not homologs_dir.startswith("/"):       homologs_dir     = os.path.abspath(homologs_dir)
         fold2pwm={}
         for pwm_file in os.listdir(os.path.join(pbm_dir, "pwms")):
-            if not pwm_file.endswith(".meme"): continue
-            if not pwm_file.endswith(".meme.s"): continue
-            hit = pwm_file.rstrip(".meme").rstrip(".meme.s")
+            if not (pwm_file.endswith(".meme") or pwm_file.endswith(".meme.s")):
+                continue
+            if pwm_file.endswith(".meme.s"):
+                hit = pwm_file[:-7]
+            elif pwm_file.endswith(".meme"):
+                hit = pwm_file[:-5]
+            else:
+                hit = os.path.splitext(pwm_file)[0]
             # Get chain PDB obj #
             m = re.search("(\S+)_(\d+)(\S+)",hit)
             if m:
@@ -833,5 +874,11 @@ if __name__ == "__main__":
     # 4.    DONE                                                           #
     ########################################################################
     if verbose:sys.stdout.write("Done\n")
-        
 
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()

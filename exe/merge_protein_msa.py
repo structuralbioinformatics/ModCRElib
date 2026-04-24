@@ -1,3 +1,12 @@
+"""
+Merge several protein MSAs into a single weighted alignment.
+
+This script reads a reference alignment describing how individual TF sequences
+should be offset relative to one another, loads a list of protein MSAs with
+associated weights, expands them into a combined alignment, and writes the
+resulting motif in MEME, PWM, MSA, and logo formats.
+"""
+
 import os, sys, re
 from collections import Counter
 import configparser
@@ -55,9 +64,11 @@ if maxsize < 1000: maxsize=1000
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
-    
+    Parse the command line options for weighted protein-MSA merging.
+
+    Returns:
+        optparse.Values: Parsed CLI options describing the reference alignment,
+        input MSA list, output prefix, and runtime settings.
     """
 
     parser = optparse.OptionParser("python merge_protein_msa.py -i input_main_alignment -j input_list_msa -w weight [-o output_file --dummy dummy_dir ]  ")
@@ -78,6 +89,18 @@ def parse_options():
     return options
 
 def get_offsets(fasta_file):
+    """
+    Extract left/right padding offsets from a reference FASTA alignment.
+
+    The alignment is expected to use leading and trailing ``X`` characters to
+    encode how each sequence should be positioned in the merged alignment.
+
+    Args:
+        fasta_file (str): FASTA file containing the reference alignment.
+
+    Returns:
+        dict: Mapping ``header -> (left_offset, right_offset)``.
+    """
     offsets={}
     for header, sequence in functions.parse_fasta_file(fasta_file):
         #print(header,sequence,len(sequence),len(sequence.lstrip("X")),len(sequence.rstrip("X")))
@@ -85,6 +108,18 @@ def get_offsets(fasta_file):
     return offsets
 
 def get_msas(msa_list):
+    """
+    Load the protein MSAs listed in a manifest file.
+
+    Each input line must contain three whitespace-separated fields:
+    ``code msa_path weight``.
+
+    Args:
+        msa_list (str): Path to the manifest file.
+
+    Returns:
+        dict: Mapping ``code -> (PWM.pMSA, weight)``.
+    """
     msas={}
     for line in functions.parse_file(msa_list):
         code,msa_file,weight = line.split()
@@ -99,12 +134,19 @@ def get_msas(msa_list):
         msas.setdefault(code,(msa,weight))
     return msas
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line workflow for weighted protein-MSA merging.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse a reference alignment to determine sequence offsets.
+        2. Load the listed protein MSAs and their relative weights.
+        3. Replicate sequences proportionally to their weights.
+        4. Write the merged motif as ``.meme``, ``.pwm``, ``.msa``, and logo.
 
+    Returns:
+        None. Output files are written next to the requested output prefix.
+    """
     # Arguments & Options #
     options = parse_options()
     fasta_file=options.input_main_alignment
@@ -146,7 +188,14 @@ if __name__ == "__main__":
     if verbose: sys.stdout.write("-- Write LOGOS %s...\n"%(output.rstrip(".msa")+".logo"))
     PWM.write_protein_logo(merge_msa,output.rstrip(".msa")+".logo",dummy_dir)
     if verbose: print("Done")    
-    
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 
 
 

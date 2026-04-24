@@ -35,7 +35,6 @@ from ModCRElib.structure.protein import dssp,  model_protein
 
 
 # Imports jbonet's modules #
-#from SBILib.external.blast import BlastResult as BR
 from SBILib.external.blast.BlastResult import BlastResult as BR
 from SBILib.external.blast.BlastHit import BlastHit as BH
 from SBILib.structure import PDB
@@ -46,12 +45,20 @@ from SBILib.structure.chain import Chain
 #-------------#
 
 def filter_hit(query_alignment, hit_alignment, chain_id, pdb_obj, contacts_obj, dssp_obj):
-    '''
-    This function filters a hit if the query does not cover all of the core
-    (i.e. region of the hit that contacts the DNA). 
+    """
+    Decide whether a hit should be filtered by interface-coverage criteria.
 
-    @return           = boolean
-    '''
+    Args:
+        query_alignment (str): Aligned query sequence.
+        hit_alignment (str): Aligned hit sequence.
+        chain_id (str): PDB chain identifier for the template.
+        pdb_obj (PDB): Parsed PDB structure object.
+        contacts_obj (Contacts): Protein-DNA contacts for the template.
+        dssp_obj (DSSP): Secondary-structure assignment object.
+
+    Returns:
+        bool: True when the hit should be discarded; False otherwise.
+    """
 
     # Get sequence/PDB correlation #
     sequence_to_crystal, crystal_to_sequence = model_protein.get_sequence_to_crystal_correlations(pdb_obj=pdb_obj, pdb_chain=chain_id)
@@ -103,6 +110,15 @@ def filter_hit(query_alignment, hit_alignment, chain_id, pdb_obj, contacts_obj, 
 
 
 def get_homologs(options):
+    """
+    Build, filter, and write homolog/ortholog hits from a compacted input file.
+
+    Args:
+        options (optparse.Values): Parsed command-line options.
+
+    Returns:
+        None. Curated hits are written to the selected output file.
+    """
 
     input_file=options.input_file
     sys.stdout.write("\t- Homologs of %s\n"%input_file)
@@ -144,11 +160,30 @@ def get_homologs(options):
     
 
 def parse_options():
-    '''
-    Create a file of homologs ensuring the ungapped sequence and DNA contacts.
-    '''
+    """
+    Parse command-line options for homolog and ortholog extraction.
 
-    parser = optparse.OptionParser("homologs.py -i INPUT_FILE  --pbm=PBM_DIR --pdb=PDB_DIR  [--filter --dummy DUMMY_DIR --out OUTPUT_FILE --specie SPECIE -v]")
+    How to run:
+        python homologs.py -i INPUT_FILE --pbm PBM_DIR --pdb PDB_DIR
+            [--filter --specie SPECIE --dummy DUMMY_DIR --out OUTPUT_FILE -v]
+
+    Example:
+        python homologs.py -i hits.tsv --pbm pbm_data --pdb pdb_data
+            --filter --specie 9606 -o orthologs.tsv
+
+    The parser configures:
+        - Input compacted BLAST/HMM hit file.
+        - PBM/PDB resources required for interface-aware filtering.
+        - Optional species restriction and output destination.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for homolog post-processing.
+    """
+
+    parser = optparse.OptionParser("python homologs.py -i INPUT_FILE --pbm PBM_DIR --pdb PDB_DIR [--filter --dummy DUMMY_DIR --out OUTPUT_FILE --specie SPECIE -v]")
 
     parser.add_option("-i", action="store", type="string", dest="input_file", default=None, help="Input blast/hmm file", metavar="INPUT_FILE")
     parser.add_option("--filter", default=False, action="store_true", dest="filter_hits", help="Filter twilight zone hits and  homologs that do not cover 100% of interface (default = False)", metavar="{boolean}")
@@ -174,20 +209,23 @@ def parse_options():
 #-------------#
 
 class Species(object):
-    '''
-    This class defines a Species file.
-    '''
+    """
+    Parse species metadata and provide taxon lookup helpers.
+    """
 
     def __init__(self, species_file):
+        """Load species metadata from the UniProt species listing file."""
         self._file = species_file
         self._taxons = None
 
         self._parse_file()
 
     def _get_file(self):
+        """Return the configured species metadata file path."""
         return self._file
 
     def _parse_file(self):
+        """Parse species taxonomy entries into an in-memory lookup table."""
         if os.path.exists(self._get_file()):
             read = False
             self._taxons = {}
@@ -214,6 +252,7 @@ class Species(object):
             raise ValueError("Could not open species file %s" % self._get_file())
 
     def get_taxons(self, code=None, kingdom=None, name=None):
+        """Return taxon identifiers matching code, kingdom, or species name."""
         taxons = []
 
         if code != None:
@@ -236,11 +275,38 @@ class Species(object):
 
 
 class Homologs(object):
-    '''
-    This class defines a Homologs object.
-    '''
+    """
+    Store and post-process homolog hits from BLAST/HMM compacted output.
+
+    This class is a wrapper around SBIlib BLAST data objects:
+        - `SBILib.external.blast.BlastResult` (imported here as `BR`)
+        - `SBILib.external.blast.BlastHit` (imported here as `BH`)
+
+    Object features:
+        - Input source path with optional immediate parsing (`_file`).
+        - Internal homolog container as an SBIlib `BlastResult` object
+          (`_homologs`), including query metadata and hit collection.
+        - Optional filtering mode flag (`_filter`) controlling twilight-zone and
+          interface-aware homolog screening.
+        - Parser that converts compact tabular BLAST/HMM rows into SBIlib
+          `BlastHit` records and appends them to `_homologs._hits`.
+        - Post-processing helpers to add hits, retrieve homolog sets, filter by
+          interface constraints, and obtain species-specific ortholog subsets.
+    """
 
     def __init__(self, homologs_file=None, use_filter=False ):
+        """
+        Initialize homolog storage and optionally parse an input file.
+
+        Args:
+            homologs_file (str, optional): Path to compacted homolog rows
+                generated by BLAST/HMM wrappers in this package.
+            use_filter (bool, optional): Enable stricter filtering behavior
+                (twilight-zone/interface-aware filtering) in downstream methods.
+
+        Returns:
+            None.
+        """
         self._file = homologs_file
         self._homologs = BR()
         self._filter   = use_filter
@@ -248,9 +314,11 @@ class Homologs(object):
             self._parse_file()
 
     def _get_file(self):
+        """Return the configured homolog-input file path."""
         return self._file
 
     def _parse_file(self):
+        """Parse compacted BLAST/HMM rows into `BlastHit` objects."""
         hfile=self._get_file()
         if os.path.exists(hfile):
             if  hfile.endswith(".gz"):
@@ -296,13 +364,16 @@ class Homologs(object):
 
 
     def add_homolog(self, blast_hit=None):
+        """Append one homolog hit object to the current collection."""
         if blast_hit is not None:
           self._homologs._hits.append(blast_hit)
 
     def get_homologs(self):
+        """Return the internal homolog hit collection."""
         return self._homologs
 
     def filter_hits_by_interface(self,pdb_dir,dummy_dir="/tmp"):
+        """Filter homolog hits that do not preserve structural interface cues."""
         # Initialize #
         unfiltered_hits = BR()
         # Twilight zone #
@@ -421,6 +492,7 @@ class Homologs(object):
         return unfiltered_hits
 
     def get_orthologs(self, specie=None):
+        """Return homolog hits restricted to a requested species/taxon."""
         # Initialize #
         orthologs               = BR()
         orthologs._query        = self._homologs.query
@@ -474,6 +546,7 @@ class Homologs(object):
         return orthologs
 
     def write(self, output_file):
+        """Write compacted homolog records to an output file."""
         # Twilight zone #
         tz_parameter = 0
         tz_type = None
@@ -487,9 +560,24 @@ class Homologs(object):
 #-------------#
 
 
-if __name__ == "__main__":
+def main():
+    """
+    Run the command-line homolog curation workflow.
 
+    Workflow:
+        1. Parse runtime options and load the compacted input hits.
+        2. Select homologs or species-restricted orthologs as requested.
+        3. Optionally filter hits by DNA-interface coverage constraints.
+        4. Write the curated homolog set to the output file.
+
+    Returns:
+        None. Curated homolog entries are written to disk.
+    """
     # Arguments & Options #
-    options       = parse_options()
-    homologs_obj  = get_homologs(options)
+    options = parse_options()
+    get_homologs(options)
+
+
+if __name__ == "__main__":
+    main()
 

@@ -39,12 +39,51 @@ from SBILib.structure import PDB
 
 
 class Threaded(object):
-    '''
-    This class defines a thread object.
-    
-    '''
+    """
+    Store, parse, and write threading assignments for protein-DNA templates.
+
+    Object features:
+        - Template metadata (`_pdb_name`, `_pdb_chain`, `_helix`).
+        - Alignment/quality metadata (`_identity`, `_coverage`, `_pdb_ali`,
+          `_query_ali`).
+        - Threaded protein map keyed by `(chain, residue_number)`.
+        - Threaded DNA maps by k-mer and binding start (`_dna`, `_dna_fixed`).
+        - Expanded basepair-to-nucleotide lookup tables for both DNA maps.
+
+    Example serialized threading object:
+        # PDB name    : 1ABC
+        # PDB chain   : A
+        # DNA helix   : 1
+        # % identity  : 87.5
+        # % coverage  : 93.2
+        # PDB align   : MKT--LAV
+        # Query align : MRSQQLAV
+        >protein
+        A;10;M
+        A;11;R
+        A;12;S
+        A;13;L
+        A;14;A
+        A;15;V
+        >dna
+        ACGTAC;0
+        >dna_fixed
+        ACGTAC;0
+        //
+    """
 
     def __init__(self, threading_file=None):
+        """
+                Initialize a threading container and optionally parse a file.
+        
+                Args:
+                    threading_file (str, optional): Path to a threading file.
+        
+                Returns:
+                    None.
+        
+        Args:
+            threading_file (Any): Path to the input/output file."""
         if threading_file is not None: 
            self._file = threading_file
            self._check_parsing()
@@ -64,6 +103,7 @@ class Threaded(object):
         self._basepairs_fixed = None
 
     def _check_parsing(self):
+        """Initialize internal maps and parse file when needed."""
         if self._file is not None:
             self._protein = {}
             self._dna = {}
@@ -73,9 +113,11 @@ class Threaded(object):
             self._parse_file()
 
     def _get_file(self):
+        """Return source threading file path."""
         return self._file
 
     def _parse_file(self):
+        """Parse threading file blocks into protein/DNA assignment maps."""
         if os.path.exists(self._get_file()):
             threaded = None
             if self._get_file().endswith(".gz"):
@@ -133,50 +175,91 @@ class Threaded(object):
             raise ValueError("Could not open threading file %s" % self._get_file())
 
     def get_pdb_name(self):
+        """Return template PDB identifier."""
         if self._pdb_name is None: self._check_parsing()
         return self._pdb_name
 
     def set_pdb_name(self,pdb_name):
+        """Set template PDB identifier.
+        
+        Args:
+            pdb_name (Any): Value used by this routine."""
         self._pdb_name=pdb_name
 
     def get_pdb_chain(self):
+        """Return threaded template protein chain identifier."""
         if self._pdb_chain is None: self._check_parsing()
         return self._pdb_chain
 
     def set_pdb_chain(self,pdb_chain):
+        """Set threaded template protein chain identifier.
+        
+        Args:
+            pdb_chain (Any): PDB structure identifier and chain selector."""
         self._pdb_chain=pdb_chain
     
     def get_dna_helix(self):
+        """Return DNA helix identifier associated with the thread."""
         if self._helix is None: self._check_parsing()
         return self._helix
 
     def set_dna_helix(self,dna_helix):
+        """Set DNA helix identifier for this thread.
+        
+        Args:
+            dna_helix (Any): DNA identifier, sequence, or DNA-related data."""
         self._helix=dna_helix
 
     def get_score(self):
+        """Return combined score as identity × coverage."""
         if self._identity is None or self._coverage is None: self._check_parsing()
         return self._identity * self._coverage
 
     def set_identity(self,identity):
+        """Set identity metric.
+        
+        Args:
+            identity (Any): Value used by this routine."""
         self._identity=identity
 
     def set_coverage(self,coverage):
+        """Set coverage metric.
+        
+        Args:
+            coverage (Any): Value used by this routine."""
         self._coverage=coverage
 
     def set_pdb_ali(self,pdb_ali):
+        """Set template alignment string.
+        
+        Args:
+            pdb_ali (Any): Value used by this routine."""
         self._pdb_ali=pdb_ali
 
     def set_query_ali(self,query_ali):
+        """Set query alignment string.
+        
+        Args:
+            query_ali (Any): Value used by this routine."""
         self._query_ali=query_ali
 
     def set_protein(self,protein):
+        """Set threaded protein map keyed by `(chain, residue_number)`.
+        
+        Args:
+            protein (Any): Protein identifier, object, or protein-related data."""
         self._protein = protein
 
     def get_protein(self):
+        """Return threaded protein map."""
         if self._protein is None: self._check_parsing()
         return self._protein
 
     def set_dna(self,dna):
+        """Set k-mer DNA assignments and rebuild basepair lookup map.
+        
+        Args:
+            dna (Any): DNA identifier, sequence, or DNA-related data."""
         self._basepairs = {}
         self._dna = dna
         for seq,binding in dna.items():
@@ -185,6 +268,10 @@ class Threaded(object):
             self._basepairs.setdefault((seq, basepairs.pop(0)), nucleotide)
 
     def set_dna_fixed(self,dna_fixed):
+        """Set corrected/fixed DNA assignments and rebuild basepair map.
+        
+        Args:
+            dna_fixed (Any): DNA identifier, sequence, or DNA-related data."""
         self._basepairs_fixed = {}
         self._dna_fixed = dna_fixed
         for seq,binding in dna_fixed.items():
@@ -193,69 +280,125 @@ class Threaded(object):
             self._basepairs_fixed.setdefault((seq, basepairs_fixed.pop(0)), nucleotide)
 
     def get_kmers(self):
+        """Return threaded k-mer assignments."""
         if self._dna is None or self._dna =={}: self._check_parsing()
         return self._dna
 
     def get_kmers_fixed(self):
+        """Return fixed threaded k-mer assignments."""
         if self._dna_fixed is None or self._dna_fixed=={}:self._check_parsing()
         return self._dna_fixed
 
     def has_chain(self, chain):
+        """Return whether input chain matches threaded chain.
+        
+        Args:
+            chain (Any): Chain identifier."""
         if self._pdb_chain is None: self._check_parsing()
         return chain == self._pdb_chain    
 
     def has_aminoacid(self, chain, residue_num):
+        """Return whether a threaded amino acid exists for chain/position.
+        
+        Args:
+            chain (Any): Chain identifier.
+            residue_num (Any): Numeric identifier/index used by this routine."""
         if self._protein is None: self._check_parsing()
         return (chain, residue_num) in iter(self._protein.keys())
 
     def get_threaded_protein_sequence(self, chain):
+        """Return threaded protein sequence for one chain.
+        
+        Args:
+            chain (Any): Chain identifier."""
         if self._protein is None: self._check_parsing()
         if self.has_chain(chain):
             return "".join([self._protein[(key)] for key in sorted(self._protein, key=lambda x: x[-1]) if chain == key[0]])
         return None
 
     def get_threaded_aminoacid(self, chain, residue_num):
+        """Return threaded amino acid at one chain/residue position.
+        
+        Args:
+            chain (Any): Chain identifier.
+            residue_num (Any): Numeric identifier/index used by this routine."""
         if self._protein is None: self._check_parsing()
         if self.has_aminoacid(chain, residue_num):
             return self._protein[(chain, residue_num)]
         return None
 
     def has_basepair(self, kmer, basepair):
+        """Return whether a basepair mapping exists in threaded DNA.
+        
+        Args:
+            kmer (Any): Value used by this routine.
+            basepair (Any): Value used by this routine."""
         if self._basepairs is None: self._check_parsing()
         return (kmer, basepair) in self._basepairs
 
     def has_basepair_fixed(self, kmer, basepair):
+        """Return whether a basepair mapping exists in fixed threaded DNA.
+        
+        Args:
+            kmer (Any): Value used by this routine.
+            basepair (Any): Value used by this routine."""
         if self._basepairs_fixed is None: self._check_parsing()
         return (kmer, basepair) in self._basepairs_fixed
 
     def get_threaded_nucleotide(self, kmer, basepair):
+        """Return threaded nucleotide for one k-mer/basepair coordinate.
+        
+        Args:
+            kmer (Any): Value used by this routine.
+            basepair (Any): Value used by this routine."""
         if self._basepairs is None: self._check_parsing()
         if self.has_basepair(kmer, basepair):
             return self._basepairs[(kmer, basepair)]
         return None
 
     def get_threaded_nucleotide_fixed(self, kmer, basepair):
+        """Return fixed threaded nucleotide for one k-mer/basepair coordinate.
+        
+        Args:
+            kmer (Any): Value used by this routine.
+            basepair (Any): Value used by this routine."""
         if self._basepairs_fixed is None: self._check_parsing()
         if self.has_basepair_fixed(kmer, basepair):
             return self._basepairs_fixed[(kmer, basepair)]
         return None
    
     def has_kmer(self, kmer):
+        """Return whether a k-mer exists in threaded DNA map.
+        
+        Args:
+            kmer (Any): Value used by this routine."""
         if self._dna is None or self._dna=={}: self._check_parsing()
         return kmer in iter(self._dna.keys())
   
     def has_kmer_fixed(self, kmer):
+        """Return whether a k-mer exists in fixed DNA map.
+        
+        Args:
+            kmer (Any): Value used by this routine."""
         if self._dna_fixed is None or self._dna_fixed=={}: self._check_parsing()
         return kmer in iter(self._dna_fixed.keys())
 
 
     def get_kmer(self, kmer):
+        """Return binding start for a threaded k-mer.
+        
+        Args:
+            kmer (Any): Value used by this routine."""
         if self._dna is None or self._dna=={}: self._check_parsing()
         if self.has_kmer(kmer):
             return self._dna[kmer]
         return None
 
     def get_kmer_fixed(self, kmer):
+        """Return binding start for a fixed threaded k-mer.
+        
+        Args:
+            kmer (Any): Value used by this routine."""
         if self._dna_fixed is None or self._dna_fixed=={}: self._check_parsing()
         if self.has_kmer(kmer):
             return self._dna_fixed[kmer]
@@ -268,12 +411,20 @@ class Threaded(object):
     #    return None
 
     def get_kmer_interface(self, kmer):
+        """Return interval string `start-end` covered by a threaded k-mer.
+        
+        Args:
+            kmer (Any): Value used by this routine."""
         if self._dna is None or self._dna=={}: self._check_parsing()
         if self.has_kmer(kmer):
             return self._dna[kmer] + "-" + str(int(self._dna[kmer]) + len(kmer) - 1)
         return None
 
     def get_kmer_fixed_interface(self, kmer):
+        """Return interval string `start-end` for a fixed threaded k-mer.
+        
+        Args:
+            kmer (Any): Value used by this routine."""
         if self._dna_fixed is None or self._dna_fixed=={}: self._check_parsing()
         if self.has_kmer_fixed(kmer):
             return self._dna_fixed[kmer] + "-" + str(int(self._dna_fixed[kmer]) + len(kmer) - 1)
@@ -281,6 +432,10 @@ class Threaded(object):
 
 
     def get_alignment(self, alignment="pdb"):
+        """Return stored template or query alignment string.
+        
+        Args:
+            alignment (Any): Sequence/alignment content used in this step."""
         if alignment != "pdb" and alignment != "query":
             alignment = "pdb"
         if alignment == "pdb":
@@ -292,6 +447,17 @@ class Threaded(object):
         return None
 
     def write(self, file_name):
+        """
+                Write threading data to canonical thread file format.
+        
+                Args:
+                    file_name (str): Output threading file path.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         if self._pdb_name is None or self._protein is None or self._dna is None: self._check_parsing()
         functions.write(file_name,"# PDB name    : %s" % self._pdb_name)
         functions.write(file_name,"# PDB chain   : %s" % self._pdb_chain)
@@ -320,11 +486,33 @@ class Threaded(object):
   
 
 def parse_options():
-    '''
-    Create threading files to perform modeling for a set of homologs using the aligned residues of the binding site with a PDB template.
-    '''
+    """
+    Parse command-line options for homolog-to-template threading generation.
 
-    parser = optparse.OptionParser("thread.py -i INPUT_FILE  --pdb=PDB_FILE --chain=CHAIN --dna=DNA_SEQ [--filter --dummy DUMMY_DIR --out OUTPUT_DIRECTORY --specie SPECIE -v]")
+    How to run:
+        python threader.py -i HOMOLOG_FILE --pdb TEMPLATE_PDB --chain CHAIN_ID --dna DNA_SEQ
+            [--filter --specie SPECIE --code CODE --dummy DUMMY_DIR -o OUTPUT_DIR -v]
+
+    Example:
+        python threader.py -i homologs.out --pdb model.pdb --chain A --dna ACGTACGT --specie 9606 -v
+
+    The parser configures:
+        - Homolog input source (`-i`) and optional ortholog filtering
+          (`--filter`, `--specie`, `--code`).
+        - Template context (`--pdb`, `--chain`) and threaded DNA sequence (`--dna`).
+        - Runtime/output locations (`--dummy`, `--out`) and verbosity (`-v`).
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for input resources and output.
+    """
+
+    parser = optparse.OptionParser(
+        "python threader.py -i HOMOLOG_FILE --pdb TEMPLATE_PDB --chain CHAIN_ID --dna DNA_SEQ "
+        "[--filter --specie SPECIE --code CODE --dummy DUMMY_DIR -o OUTPUT_DIR -v]"
+    )
 
     parser.add_option("-i", action="store", type="string", dest="input_file", default=None, help="Input blast/hmm file", metavar="INPUT_FILE")
     parser.add_option("--filter", default=False, action="store_true", dest="filter_hits", help="Filter twilight zone hits and  homologs that do not cover 100% of interface (default = False)", metavar="{boolean}")
@@ -347,11 +535,23 @@ def parse_options():
 
 
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the homolog-to-template threading workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options and prepare output/dummy directories.
+        2. Load the template protein-DNA structure and derive DNA/interface context.
+        3. Parse homolog/ortholog hits and map aligned residues to template indices.
+        4. Build and write per-hit threading files (protein and DNA assignments).
+        5. Remove temporary files.
+
+    Args:
+        None.
+
+    Returns:
+        None. Threading files are written to the output directory.
+    """
 
     # Arguments & Options #
     options   = parse_options()
@@ -492,5 +692,13 @@ if __name__ == "__main__":
                     threaded_ortholog.write(threading_file)
                 
     # Clean files #
-    os.remove( dummy_file )
+    os.remove(dummy_file)
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
     

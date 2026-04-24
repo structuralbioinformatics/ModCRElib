@@ -58,9 +58,15 @@ from SBILib.structure.atom import AtomOfNucleotide
 
 
 def fileExist(file):
-    '''
-    Check existing files
-    '''
+    """
+    Check whether a path exists and is a regular file.
+
+    Args:
+        file (str | None): Path to test.
+
+    Returns:
+        bool: ``True`` when ``file`` exists and is a regular file.
+    """
     if file is not None:
         return os.path.exists(file) and os.path.isfile(file)
     else:
@@ -69,6 +75,18 @@ def fileExist(file):
 
 
 def matches(a,b,offset,overlap):
+    """
+    Count exact character matches in overlapped aligned motif segments.
+
+    Args:
+        a (str): Query aligned sequence.
+        b (str): Hit aligned sequence.
+        offset (int): TOMTOM offset between motifs.
+        overlap (int): Reported overlap length.
+
+    Returns:
+        int: Number of matched positions in the overlap window.
+    """
     if offset<0:
         start=abs(offset)
         end=min(start+overlap+1,len(a))
@@ -94,6 +112,18 @@ def matches(a,b,offset,overlap):
     return match
 
 def get_data_tomtom(tf_mdl_tomtom,hit,query):
+        """
+        Extract TOMTOM statistics and alignment details for one query/hit pair.
+
+        Args:
+            tf_mdl_tomtom (dict): Query motif to TOMTOM object map.
+            hit (str): Target motif identifier.
+            query (str): Query motif identifier.
+
+        Returns:
+            numpy.ndarray: Array containing p/q/e values, transformed scores,
+            sequences, match count, and rank.
+        """
 
         tomtom_obj=tf_mdl_tomtom.get(query)
         pvalue=qvalue=evalue=1.0
@@ -129,6 +159,21 @@ def get_data_tomtom(tf_mdl_tomtom,hit,query):
         return x
 
 def logos_tf_models(outlogos, table_of_best_pv,table_of_best_match,PWM_modcre,PWM_cisbp,PWM_jaspar,dummy_dir):
+    """
+    Generate logo files for best p-value and best match motif comparisons.
+
+    Args:
+        outlogos (str): Output directory for logos.
+        table_of_best_pv (pandas.DataFrame): Best p-value records.
+        table_of_best_match (pandas.DataFrame): Best match records.
+        PWM_modcre (str): Modeled PWM directory.
+        PWM_cisbp (str): CisBP PWM directory.
+        PWM_jaspar (str): JASPAR PWM directory.
+        dummy_dir (str): Temporary working directory.
+
+    Returns:
+        None.
+    """
 
 
     cisbp_families=set(table_of_best_pv["CisBP_Fam"].values.tolist())
@@ -188,6 +233,23 @@ def logos_tf_models(outlogos, table_of_best_pv,table_of_best_match,PWM_modcre,PW
 
 
 def table_tf_models(omdltab,  tfid, tfinfo, tf_mdl_cisbp_tomtom, tf_mdl_jaspar_tomtom, cisbp_jaspar_tomtom, verbose,tmp):
+    """
+    Build per-TF comparison tables across model, CisBP, and JASPAR motifs.
+
+    Args:
+        omdltab (str): Output directory for generated CSV tables.
+        tfid (str): TF identifier being analyzed.
+        tfinfo (list): Per-model metadata rows.
+        tf_mdl_cisbp_tomtom (dict): TOMTOM map model->CisBP.
+        tf_mdl_jaspar_tomtom (dict): TOMTOM map model->JASPAR.
+        cisbp_jaspar_tomtom (dict): TOMTOM map CisBP->JASPAR.
+        verbose (bool): Verbose logging flag.
+        tmp (str): Temporary directory.
+
+    Returns:
+        tuple[pandas.DataFrame, pandas.DataFrame, pandas.DataFrame]:
+        best-by-pvalue, best-by-match, and aggregated summary tables.
+    """
 
     if verbose: print(("Make tables for %s"%tfid))
     cisbp_families=set()
@@ -310,6 +372,20 @@ def table_tf_models(omdltab,  tfid, tfinfo, tf_mdl_cisbp_tomtom, tf_mdl_jaspar_t
 
 
 def dict_jaspar_cisbp(omdltmt, selection, jaspar_db, pwm_cisbp_dir, verbose,tmp):
+      """
+      Compute TOMTOM comparisons from selected CisBP motifs to JASPAR DB.
+
+      Args:
+          omdltmt (str): Output pickle file path.
+          selection (set): CisBP motifs to process.
+          jaspar_db (str): JASPAR database file path.
+          pwm_cisbp_dir (str): CisBP PWM directory.
+          verbose (bool): Verbose logging flag.
+          tmp (str): Temporary directory.
+
+      Returns:
+          dict: CisBP motif to TOMTOM object map.
+      """
 
       tf_mdl_tomtom={}
       
@@ -336,6 +412,20 @@ def dict_jaspar_cisbp(omdltmt, selection, jaspar_db, pwm_cisbp_dir, verbose,tmp)
 
 
 def jaspar_tf_models( omdltmt, tfid,  tf_data, pwm_models_dir, jaspar_db, tmp):
+      """
+      Compute TOMTOM comparisons from modeled TF motifs to JASPAR DB.
+
+      Args:
+          omdltmt (str): Output pickle file path.
+          tfid (str): TF identifier.
+          tf_data (dict): TF metadata and motif associations.
+          pwm_models_dir (str): Directory with modeled PWM files.
+          jaspar_db (str): JASPAR database file path.
+          tmp (str): Temporary directory.
+
+      Returns:
+          dict: Model identifier to TOMTOM object map.
+      """
 
       tf_mdl_tomtom={}
 
@@ -421,6 +511,12 @@ def parse_options():
 #-------------#
 
 def main():
+    """
+    Orchestrate CisBP/JASPAR/model motif comparison and reporting.
+
+    Returns:
+        None.
+    """
 
     # Arguments & Options #
     options = parse_options()

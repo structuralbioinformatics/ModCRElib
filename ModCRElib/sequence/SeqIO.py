@@ -1,3 +1,17 @@
+"""
+Sequence utilities for FASTA parsing, translation, and basic sequence objects.
+
+The module defines lightweight DNA/RNA/protein classes with alphabet
+validation plus helper iterators to stream FASTA records.
+
+Notes:
+    - Sequence objects validate symbols at construction time and raise
+      `IncorrectSequenceLetter` when unexpected characters are present.
+    - Translation helpers in this module are intentionally simple and return
+      contiguous ORF-like fragments per reading frame.
+    - FASTA iterators are streaming generators designed for large files.
+"""
+
 import math
 import string
 import sys
@@ -52,6 +66,25 @@ dna_start_codons = ['TTG', 'CTG', 'ATG']
 # FUNCTIONS
 
 def readframe(init,_sequence,start,stop,table):
+  """
+  Translate one reading frame into protein fragments.
+
+  Args:
+      init (int): Start offset (0, 1, or 2).
+      _sequence (str): Nucleotide sequence to translate.
+      start (list): Start codons.
+      stop (list): Stop codons.
+      table (dict): Codon-to-amino-acid translation table.
+
+  Returns:
+      list: Protein fragments found in the reading frame.
+
+  Notes:
+      - Translation starts after the first recognized start codon.
+      - Translation stops at each stop codon and resumes searching for a new
+        ORF in the same frame.
+      - Incomplete trailing codons are ignored.
+  """
   begin=False
   end=False
   proteins=[]
@@ -81,6 +114,19 @@ def readframe(init,_sequence,start,stop,table):
 
 
 def nFASTA_iterator(fasta_filename):
+ """
+ Yield DNA records from a FASTA file.
+
+ Args:
+     fasta_filename (str): Path to the FASTA file.
+
+ Yields:
+     DNASequence: Parsed DNA sequences that pass alphabet validation.
+
+ Notes:
+     - Invalid records are skipped with a warning written to stderr.
+     - Records are yielded one-by-one to avoid loading whole files in memory.
+ """
  fd=open(fasta_filename,"r")
  seq=""
  name=""
@@ -106,6 +152,19 @@ def nFASTA_iterator(fasta_filename):
  fd.close()
 
 def FASTA_iterator(fasta_filename):
+ """
+ Yield protein records from a FASTA file.
+
+ Args:
+     fasta_filename (str): Path to the FASTA file.
+
+ Yields:
+     ProteinSequence: Parsed protein sequences that pass validation.
+
+ Notes:
+     - Invalid records are skipped with a warning written to stderr.
+     - Records are yielded one-by-one to avoid loading whole files in memory.
+ """
  fd=open(fasta_filename,"r")
  seq=""
  name=""
@@ -134,14 +193,37 @@ def FASTA_iterator(fasta_filename):
 # CLASSES
 
 class IncorrectSequenceLetter(Exception):
+  """
+  Raised when a sequence contains symbols outside its allowed alphabet.
+
+  Object features:
+      - Stores an informative message describing invalid symbols and the target
+        sequence class alphabet constraints.
+  """
   def __init__(self,letter,class_name):
+    """Build an informative validation error for invalid sequence symbols."""
     super(IncorrectSequenceLetter,self).__init__(
         "The _sequence items: '%s' are not found in the alphabet of class %s\n"%(letter,class_name))
 
 class Sequence(object):
+ """
+ Base class for validated biological sequences.
+
+ Object features:
+     - Sequence identifier and raw sequence string (`_identifier`, `_sequence`)
+       with immediate alphabet validation at construction time.
+     - Class-level alphabet and residue molecular-weight tables
+       (`alphabet`, `residue_mw`) specialized by subclasses.
+     - Rich sequence behavior through Python protocol methods (length,
+       comparisons, indexing, concatenation, hashing).
+     - Convenience accessors/properties for identifier, sequence content, and
+       molecular-weight estimation.
+     - Sub-sequence containment helper for sequence relationship checks.
+ """
  alphabet=[]
  residue_mw={}
  def __init__(self,name=None,sequence=None):
+  """Initialize sequence identifier/content and validate alphabet symbols."""
   self._identifier=str(name)
   self._sequence=str(sequence)
   unknown=[w for w in self._sequence if w not in self.alphabet]
@@ -149,67 +231,100 @@ class Sequence(object):
     word=",".join(set(unknown))
     raise IncorrectSequenceLetter(word,self.__class__.__name__)
  def __len__(self):
+  """Return sequence length."""
   return len(self._sequence)
  def __eq__(self,other):
+  """Compare sequences by their sequence string."""
   return self._sequence == other._sequence #This implies that we neglect different identifiers
   #return self._sequence == other._sequence and self.identifier == other.identifier
  def __ne__(self,other):
+  """Return whether two sequence strings differ."""
   return self._sequence != other._sequence
  def __le__(self,other):
+  """Return lexicographic <= comparison between sequence strings."""
   return self._sequence <= other._sequence
  def __ge__(self,other):
+  """Return lexicographic >= comparison between sequence strings."""
   return self._sequence >= other._sequence
  def __lt__(self,other):
+  """Return lexicographic < comparison between sequence strings."""
   return self._sequence < other._sequence
  def __gt__(self,other):
+  """Return lexicographic > comparison between sequence strings."""
   return self._sequence > other._sequence
  def __getitem__(self,item):
+  """Return one residue (or slice) from the sequence string."""
   return self._sequence[item]
  def __cmp__(self,other):
+  """Legacy comparator based on sequence length."""
   if len(self._sequence) == len(other._sequence): return 0
   elif len(self._sequence) < len(other._sequence): return -1
   else: return 1
  def __hash__(self):
+  """Return hash based on sequence content."""
   #required to transform lists into set or dict (i.e. hashable elements)
   #this gives a unique id for a _sequence
   return self._sequence.__hash__()
  def __str__(self):
+  """Return a simple human-readable class description."""
   return "I am a member of the Class %s"%(self.__class__.__name__)
  def __add__(self,other):
+  """Concatenate two sequences of the same class."""
   return self.__class__(self.identifier,self._sequence+other._sequence)
  def count_tokens(self):
+  """Return the number of residues/tokens in the sequence."""
   return len(self._sequence)
  def get_identifier(self):
+  """Return the sequence identifier."""
   return self._identifier
  def get_sequence(self):
+  """Return the underlying sequence string."""
   return self._sequence
  def get_mw(self):
+  """Return molecular weight estimate from residue weights."""
   return sum(self.residue_mw.setdefault(aa,0) for aa in self._sequence)
  @property
  def identifier(self):
+  """Sequence identifier property."""
   return self._identifier
  @property
  def sequence(self):
+  """Sequence string property."""
   return self._sequence
  @property
  def mw(self):
+  """Molecular-weight property."""
   return sum(self.residue_mw.setdefault(aa,0) for aa in self._sequence)
  def has_sub_sequence(self,sub_sequence=None):
+  """Check whether another sequence is contained in this sequence."""
   if sub_sequence is None:
     raise ValueError("No sub_sequence was given")
   else:
     return sub_sequence.get_sequence() in self._sequence
 
 class NucleotideSequence(Sequence):
+ """
+ Base class for nucleotide sequences with complement/translation helpers.
+
+ Object features:
+     - Inherits identifier/sequence validation and generic sequence behavior
+       from `Sequence`.
+     - Nucleotide-specific class maps for complement, codon translation, and
+       start/stop codons (`complement`, `table`, `start`, `stop`).
+     - Convenience methods to derive complementary strands and translate all
+       three reading frames into protein fragments.
+ """
  complement={}
  table={}
  stop=[]
  start=[]
  def get_complement(self):
+  """Return the complementary nucleotide sequence."""
   na= "".join([self.complement[u] for u in self._sequence])
   id=self.identifier
   return self.__class__(id,na)
  def translate(self):
+  """Translate all three reading frames and return frame-to-protein mapping."""
   id=self.identifier
   proteins={}
   #proteins=set()
@@ -219,6 +334,16 @@ class NucleotideSequence(Sequence):
   return proteins
 
 class DNASequence(NucleotideSequence):
+ """
+ DNA sequence implementation with transcription support.
+
+ Object features:
+     - DNA alphabet/molecular-weight/complement/codon tables configured via
+       class attributes.
+     - Start/stop codon sets and DNA-to-RNA transcription map used by
+       translation/transcription helpers.
+     - `transcribe()` helper that returns an `RNASequence` representation.
+ """
  alphabet=dna_letters
  residue_mw=dna_weights
  complement=dna_complement
@@ -227,11 +352,23 @@ class DNASequence(NucleotideSequence):
  stop=dna_stop_codons
  transcript=dna_transcribe
  def transcribe(self):
+  """Transcribe DNA into RNA using the configured mapping."""
   trans="".join([self.transcript[u] for u in self.get_sequence()])
   id=self.get_identifier()
   return RNASequence(id,trans)
 
 class RNASequence(NucleotideSequence):
+ """
+ RNA sequence implementation with reverse-transcription support.
+
+ Object features:
+     - RNA alphabet/molecular-weight/complement/codon tables configured via
+       class attributes.
+     - Start/stop codon sets and RNA-to-DNA transcription map used by
+       translation/reverse-transcription helpers.
+     - `reverse_transcribe()` helper that returns a `DNASequence`
+       representation.
+ """
  alphabet=rna_letters
  residue_mw=rna_weights
  complement=rna_complement
@@ -240,18 +377,33 @@ class RNASequence(NucleotideSequence):
  stop=rna_stop_codons
  transcript=rna_transcribe
  def reverse_transcribe(self):
+  """Reverse-transcribe RNA into DNA using the configured mapping."""
   trans="".join([self.transcript[u] for u in self.get_sequence()])
   id=self.get_identifier()
   return DNASequence(id,trans)
 
 class ProteinSequence(Sequence):
+ """
+ Protein sequence implementation with reverse translation helpers.
+
+ Object features:
+     - Protein alphabet and amino-acid molecular-weight table configured via
+       class attributes.
+     - Inherits validated sequence storage and generic sequence behavior from
+       `Sequence`.
+     - Reverse-translation helpers that map amino-acid residues to
+       representative RNA or DNA codons (`reverse_translate_to_RNA`,
+       `reverse_translate_to_DNA`).
+ """
  alphabet=protein_letters
  residue_mw=protein_weights
  def reverse_translate_to_RNA(self):
+  """Reverse-translate protein residues to representative RNA codons."""
   rnaseq= "".join([rna_table_back[u] for u in self.get_sequence()])
   id=self.get_identifier()
   return RNASequence(id,rnaseq)
  def reverse_translate_to_DNA(self):
+  """Reverse-translate protein residues to representative DNA codons."""
   dnaseq= "".join([dna_table_back[u] for u in self.get_sequence()])
   id=self.get_identifier()
   return DNASequence(id,dnaseq)

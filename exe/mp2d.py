@@ -1,3 +1,11 @@
+"""
+Protein-to-DNA (ModCRE) pipeline: modeling, PWM/profiler runs, and web JSON layout.
+
+Orchestrates ``model_protein`` / threading inputs, calls ``profiler`` or ``pwm_pbm``
+with DNA FASTA when provided, copies ``profile*`` artifacts into per-motif folders,
+clusters PWMs, and fills experiment JSON fields (``motifs``, ``motif_info``,
+``binding_profiles``) consumed by the Bottle backend and static site.
+"""
 import os, sys, re
 import configparser
 import json
@@ -65,6 +73,17 @@ from ModCRElib.msa import  pwm_pbm as PWM
 #-------------#
 
 def update_profiles(json_dict,output_dir,remote):
+    """
+    Re-run ``profiler.py`` or ``pwm_pbm.py`` after PWM edits in protein2DNA update mode.
+
+    Args:
+        json_dict (dict): Experiment dictionary (must define DNA sequences and options).
+        output_dir (str): Job root containing ``TF_modeling/``.
+        remote (bool): Submit the command remotely when True.
+
+    Returns:
+        None. Raises ``ValueError`` if remote execution returns an ``Error`` prefix.
+    """
 
     python = os.path.join(config.get("Paths", "python_path"), "python")
     pbm_dir = config.get("Paths", "pbm_dir")
@@ -120,11 +139,23 @@ def update_profiles(json_dict,output_dir,remote):
 
 
 def get_binding_site_length(output_dir,pdb_file,remote=False):
+    """
+    Derive binding-site span in nucleotide positions from a dinucleotide interface file.
+
+    Args:
+        output_dir (str): Job directory (hosts ``dummy/``).
+        pdb_file (str): Path to the TF–DNA PDB model.
+        remote (bool): Run ``interface.py`` remotely if the interface file is missing.
+
+    Returns:
+        int: Length of the binding site (residue span) inferred from interface rows.
+    """
 
 
     dummy_dir = os.path.join(output_dir,"dummy")
     interface_file = os.path.join(dummy_dir, os.path.basename(pdb_file).replace(".pdb","_interface.txt"))
     pdb_dir = config.get("Paths", "pdb_dir")
+    logfile = os.path.join(output_dir, "interface_binding_site.log")
 
     #MAKE INTERFACE
     parameters = " -i " + pdb_file + " --dummy " + dummy_dir + " -d dinucleotides " + " -o " + interface_file
@@ -167,6 +198,20 @@ def get_binding_site_length(output_dir,pdb_file,remote=False):
 
 
 def generate_motif_list(pdb_files,families,output_dir,json_dict,dna_fa):
+    """
+    Collect per-model motif metadata, PWM files, and binding-profile paths for the web UI.
+
+    Args:
+        pdb_files (list): Paths to modeled PDBs under ``TF_modeling/``.
+        families (dict): ``pdb_chain -> family`` mapping from ``families.txt``.
+        output_dir (str): Job directory with per-motif subfolders.
+        json_dict (dict): Experiment dictionary (DNA list, input type, TF name).
+        dna_fa (dict): Maps DNA ``_id`` keys to sanitized multi-FASTA suffixes.
+
+    Returns:
+        list: Sorted motif dicts (by sequence identity), each describing PWMs, logos,
+        binding profiles, and clustering aids.
+    """
 
     motif_list=[]
     for i in range(0, len(pdb_files)):
@@ -261,6 +306,16 @@ def generate_motif_list(pdb_files,families,output_dir,json_dict,dna_fa):
     return motif_list
 
 def update_classified_pdbs(pdb_files):
+    """
+    Rebuild PWM cluster assignments when multiple ``profile.*`` folders exist.
+
+    Args:
+        pdb_files (list): Modeled PDB paths whose neighboring ``profile*`` dirs are scanned.
+
+    Returns:
+        dict: ``cluster_id -> set`` of ``(pdb_path, a, b, c, d)`` tuples encoding
+        domain intervals used for web clustering.
+    """
 
     directories = set()
     for pdb_file in pdb_files:
@@ -314,6 +369,16 @@ def update_classified_pdbs(pdb_files):
 
 
 def get_cluster_fragments(clusters,fragment_list):
+    """
+    Map PWM profile fragments (DNA coordinate windows) onto structural clusters.
+
+    Args:
+        clusters (dict): Output of ``update_classified_pdbs`` or ``classify_pdbs``.
+        fragment_list (list): String encodings of interval sets (monomer/dimer windows).
+
+    Returns:
+        dict: ``cluster_id -> fragment_label`` chosen by maximum overlap with cluster spans.
+    """
 
     groups_by_fragment={}
     if len(fragment_list)>0:
@@ -398,6 +463,17 @@ def get_cluster_fragments(clusters,fragment_list):
     return fragment
 
 def group_motifs_by_clusters(clusters,motif_list):
+    """
+    Attach motif dicts to PWM clusters using PDB name matches.
+
+    Args:
+        clusters (dict): Cluster id to list of ``(pdb_path, ...)`` tuples.
+        motif_list (list): Motifs with ``model`` names aligned to PDB basenames.
+
+    Returns:
+        dict: ``cluster_id -> [motifs...]`` with per-cluster ``ID`` renumbering inside
+        ``get_motif_clusters``.
+    """
 
     # Cluster motifs into clusters. 
     groups={}
@@ -421,6 +497,15 @@ def group_motifs_by_clusters(clusters,motif_list):
     return groups
 
 def get_motif_info(motif_list):
+    """
+    Build plotting coordinates for motif clusters (monomer vs dimer domain geometry).
+
+    Args:
+        motif_list (list): List of clusters; each cluster is a list of motif dicts.
+
+    Returns:
+        dict: ``cluster_index -> {x_values, y_values, ...}`` suitable for web charts.
+    """
 
     motif_info = {}
     for ID in range(1, len(motif_list)+1):
@@ -470,6 +555,20 @@ def get_motif_info(motif_list):
 
 
 def  generate_binding_profiles_json(clusters,fragment,output_dir,json_dict,dna_fa):
+    """
+    Populate JSON paths for averaged binding-profile HTML/CSV files per cluster.
+
+    Args:
+        clusters (dict): Cluster ids from classification.
+        fragment (dict): Fragment labels per cluster from ``get_cluster_fragments``.
+        output_dir (str): Job directory with ``DNA/binding_profiles/``.
+        json_dict (dict): Experiment dictionary (DNA list).
+        dna_fa (dict): DNA id to FASTA suffix map.
+
+    Returns:
+        dict: Nested structure ``cluster_id -> dna_id -> {html, csv, ...}`` plus
+        comparison entries.
+    """
 
     jd={}
     for number_of_cluster in clusters.keys():
@@ -499,6 +598,17 @@ def  generate_binding_profiles_json(clusters,fragment,output_dir,json_dict,dna_f
 
 
 def generate_profiles(json_dict,output_dir,remote):
+    """
+    Initial PWM / profile generation for new protein2DNA jobs (profiler or pwm_pbm).
+
+    Args:
+        json_dict (dict): Experiment dictionary with DNA sequences and modeling output.
+        output_dir (str): Job root.
+        remote (bool): Cluster offload flag.
+
+    Returns:
+        None. Raises ``ValueError`` on remote errors.
+    """
 
     python = os.path.join(config.get("Paths", "python_path"), "python")
     pbm_dir = config.get("Paths", "pbm_dir")
@@ -544,6 +654,17 @@ def generate_profiles(json_dict,output_dir,remote):
 
 
 def arrange_profiles_for_web(json_dict,output_dir,pdb_files):
+    """
+    Copy PWM, logo, HTML, and CSV artifacts into the per-motif layout expected by the web app.
+
+    Args:
+        json_dict (dict): Experiment dictionary (DNA sequences for multi-DNA naming).
+        output_dir (str): Job directory receiving ``{pdb_name}/PWM`` and global DNA folders.
+        pdb_files (list): Modeled PDB paths whose sibling ``profile*`` dirs are harvested.
+
+    Returns:
+        list: Fragment labels discovered from ``profile.*`` directory names.
+    """
   
     fragment_list=[]
     fragment_set =set()
@@ -662,6 +783,19 @@ def arrange_profiles_for_web(json_dict,output_dir,pdb_files):
 
 
 def tf_modeling(json_dict, input_file, output_dir,  remote,dummy_dir):
+    """
+    Run ``model_protein.py`` for FASTA input and collect resulting PDB models.
+
+    Args:
+        json_dict (dict): Options for templates, models, monomers, dimers.
+        input_file (str): FASTA path passed to ``model_protein.py``.
+        output_dir (str): Job directory (models land in ``TF_modeling/``).
+        remote (bool): Cluster execution flag.
+        dummy_dir (str): Scratch directory for modeling.
+
+    Returns:
+        list: Sorted PDB paths, or ``[]`` if remote modeling reports an error.
+    """
 
     pbm_dir = config.get("Paths", "pbm_dir")
     pdb_dir = config.get("Paths", "pdb_dir")
@@ -714,6 +848,15 @@ def tf_modeling(json_dict, input_file, output_dir,  remote,dummy_dir):
     return pdb_files
 
 def get_pdb_models(output_dir):
+    """
+    List ``model*.pdb`` files produced under ``TF_modeling``.
+
+    Args:
+        output_dir (str): Job root.
+
+    Returns:
+        list: Sorted absolute paths to modeled PDBs.
+    """
 
     # Get the output files # 
     pdb_files = []
@@ -725,6 +868,18 @@ def get_pdb_models(output_dir):
 
 
 def tf_threading(input_file, output_dir, pdb_dir, dummy_dir):
+    """
+    Generate models from a threading text file using ``model_protein.py -t``.
+
+    Args:
+        input_file (str): Threading file path.
+        output_dir (str): Job directory.
+        pdb_dir (str): Template PDB library root.
+        dummy_dir (str): Scratch directory.
+
+    Returns:
+        list: PDB paths written to ``TF_modeling`` (may be empty on failure).
+    """
 
     print((python + " " + scripts_path + "/model_protein.py -i " + input_file + " -o " + os.path.join(output_dir, "TF_modeling") + " -p " + pdb_dir + " --dummy=" + dummy_dir + " -t -v -l model"))
     process = subprocess.Popen([python, scripts_path + "/model_protein.py", "-i", input_file, "-o", os.path.join(output_dir, "TF_modeling"), "-p " + pdb_dir, "--dummy=" + dummy_dir, "-t", "-v", "-l", "model"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -738,6 +893,16 @@ def tf_threading(input_file, output_dir, pdb_dir, dummy_dir):
 
 
 def get_seq_identity(json_dict, pdb_path):
+    """
+    Read percent sequence identity from ``model_model.summary.txt`` for a modeled PDB.
+
+    Args:
+        json_dict (dict): Must include ``input['type']`` (PDB inputs short-circuit to 100).
+        pdb_path (str): Path to the model PDB.
+
+    Returns:
+        float or None: Identity percentage, or ``None`` if not found.
+    """
 
     seq_identity = None
     if json_dict['input']['type'] == "PDB":
@@ -766,6 +931,16 @@ def get_seq_identity(json_dict, pdb_path):
 
 
 def get_mono_dim_hetero(json_dict, pdb_obj):
+    """
+    Classify a complex as ``Monomer`` or ``Dimer`` from SBILib protein chain count.
+
+    Args:
+        json_dict (dict): Unused (signature kept for callers).
+        pdb_obj (PDB): Parsed structure.
+
+    Returns:
+        str or None: ``\"Monomer\"``, ``\"Dimer\"``, or ``None`` if >2 protein chains.
+    """
 
     protein_chains = []
     for p in pdb_obj.chains:
@@ -779,6 +954,19 @@ def get_mono_dim_hetero(json_dict, pdb_obj):
             
 
 def tf_dna_modeling(protein, dna, remote=False):
+    """
+    Build a TF–DNA complex PDB for a given protein model path and DNA sequence.
+
+    Runs ``interface.py`` then ``model_dna.py`` under the inferred job directory.
+
+    Args:
+        protein (str): Path fragment pointing to a model PDB inside a job tree.
+        dna (str): DNA sequence to model (single string, uppercased).
+        remote (bool): Run interface/model_dna remotely when True.
+
+    Returns:
+        str: Web-relative path to ``model.{dna}.pdb`` (root stripped).
+    """
 
     # Obtain the interface file #
     #Required files and directories
@@ -795,6 +983,7 @@ def tf_dna_modeling(protein, dna, remote=False):
     dummy_dir = os.path.join(output_dir,"dummy")
     interface_file = os.path.join(dummy_dir, os.path.basename(protein) + "_" + dna + "_interface.txt")
     pdb_dir = config.get("Paths", "pdb_dir")
+    logfile = os.path.join(output_dir, "tf_dna_modeling.log")
     print(("MODEL protein %s with DNA %s"%(input_protein,dna.upper())))
 
     #MAKE INTERFACE
@@ -836,6 +1025,16 @@ def tf_dna_modeling(protein, dna, remote=False):
     return output_file
 
 def handle_input_pwms(input_pwms):
+    """
+    Parse the comma-separated PWM override string from the web form.
+
+    Args:
+        input_pwms (str): Encoded PWM entries ``pwm;cluster;motif;name`` per item.
+
+    Returns:
+        list: Dicts with keys ``pwm``, ``cluster``, ``motif``, ``name``; empty list
+        when input is blank or ``null``.
+    """
 
     if input_pwms == "" or input_pwms == "null":
         return []
@@ -854,6 +1053,17 @@ def handle_input_pwms(input_pwms):
     return input_pwms_data
 
 def load_input_pwm(input_pwms_data,json_dict,output_dir):
+    """
+    Replace on-disk MEME PWMs for selected cluster/motif indices and sync copies.
+
+    Args:
+        input_pwms_data (list): Parsed PWM payloads from ``handle_input_pwms``.
+        json_dict (dict): Experiment dictionary with ``motifs`` tree.
+        output_dir (str): Job directory containing modeling outputs.
+
+    Returns:
+        None.
+    """
    
     print("LOAD NEW PWMs")
     for k in range(0, len(json_dict["motifs"])):
@@ -893,6 +1103,16 @@ def load_input_pwm(input_pwms_data,json_dict,output_dir):
 
 
 def clean_up_profiles(json_dict,working_dna):
+  """
+  Drop binding-profile entries for DNA sequences removed during an update.
+
+  Args:
+      json_dict (dict): Experiment dict with ``binding_profiles`` / ``motifs``.
+      working_dna (list): DNA ``_id`` values that remain active.
+
+  Returns:
+      None.
+  """
   # Remove old binding profiles #
   # For Global
   if "binding_profiles" in json_dict:
@@ -923,6 +1143,17 @@ def clean_up_profiles(json_dict,working_dna):
 
 
 def fix_pdb(input_file,output_file,dummy_dir):
+  """
+  Split a multi-chain PDB into single-chain temporaries, re-letter chains A..Z, merge.
+
+  Args:
+      input_file (str): Source PDB with multiple chains in one file.
+      output_file (str): Destination PDB with contiguous chain IDs.
+      dummy_dir (str): Folder for intermediate ``dummy_*.pdb`` shards.
+
+  Returns:
+      None.
+  """
   chain_ids=list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
   n=0
   write_file=False
@@ -965,17 +1196,35 @@ def fix_pdb(input_file,output_file,dummy_dir):
 #---------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse CLI options for standalone protein-to-DNA (ModCRE) batch execution.
 
-    parser = optparse.OptionParser("Usage: modcre.py [--dummy=DUMMY_DIR] -j JSON_FILE [-o OUTPUT_DIR -v]")
+    How to run:
+        python mp2d.py [--dummy DUMMY_DIR] -j JOB.json [-o OUTPUT_DIR] [-u] [-r] [-v]
+
+    Example:
+        python mp2d.py -j protein2dna_input.json -o ./job_out -v
+
+    The parser configures:
+        Experiment JSON path, output root, update mode (re-profile existing job),
+        remote execution, and verbosity.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed options namespace.
+    """
+
+    parser = optparse.OptionParser(
+        "Usage: mp2d.py [--dummy=DUMMY_DIR] -j JSON_FILE [-o OUTPUT_DIR] [-u] [-r] [-v]"
+    )
 
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="DUMMY_DIR")
-    parser.add_option("-j", "--json", action="store", type="string", dest="json_file", help="Json file (from jsonBuilder.py; default = None)", metavar="JSON_FILE")
+    parser.add_option("-j", "--json", action="store", type="string", dest="json_file", help="Experiment JSON (protein2dna or update)", metavar="JSON_FILE")
     parser.add_option("-o", "--output-dir", default="./", action="store", type="string", dest="output_dir", help="Output directory (default = ./)", metavar="OUTPUT_DIR")
-    parser.add_option("-u", "--update",default=False,action="store_true", dest="update",help="Run update mode of protein 2 dna (default=False)")
-    parser.add_option("-r", "--remote",default=False,action="store_true", dest="remote",help="Run in remote host server (default=False)")
+    parser.add_option("-u", "--update",default=False,action="store_true", dest="update",help="Run protein2DNA update mode on an existing job folder (default=False)")
+    parser.add_option("-r", "--remote",default=False,action="store_true", dest="remote",help="Run heavy steps on remote host/cluster (default=False)")
     parser.add_option("-v", "--verbose", default=False, action="store_true", dest="verbose", help="Verbose mode (default = False)")
     
     (options, args) = parser.parse_args()
@@ -990,6 +1239,28 @@ def parse_options():
 #---------------#
 
 def protein_2_dna(json_dict, output_dir, remote=False,verbose=True):
+    """
+    Full protein-to-DNA workflow: modeling, PWMs, clustering, and web JSON packaging.
+
+    Workflow:
+        1. Normalize TF/DNA ids, create job folders, and branch on input type
+           (FASTA modeling, PDB upload, or threading file).
+        2. Run initial PWM generation (``generate_profiles``), rearrange outputs for
+           the web (``arrange_profiles_for_web``), classify/cluster models, and build
+           ``motif_list`` metadata (PWM paths, logos, binding-profile links).
+        3. Populate ``json_dict`` with ``motifs``, ``motif_info``, and global
+           ``binding_profiles`` paths; set ``error_msg`` if any stage fails.
+
+    Args:
+        json_dict (dict): Experiment dictionary from the web API / JSON file.
+        output_dir (str): Absolute job directory.
+        remote (bool): Offload modeling and profiling when True.
+        verbose (bool): User-facing progress messages.
+
+    Returns:
+        dict: Updated experiment dictionary with ``motifs``, ``motif_info``,
+        ``binding_profiles``, or ``error_msg`` on failure.
+    """
 
 
     # Initialize #
@@ -1202,6 +1473,18 @@ def protein_2_dna(json_dict, output_dir, remote=False,verbose=True):
     return json_dict
 
 def protein_2_dna_update(json_dict, output_dir, remote=False, verbose=True):
+    """
+    Refresh PWMs and binding profiles after DNA or user-PWM edits for an existing job.
+
+    Args:
+        json_dict (dict): Reloaded experiment dictionary.
+        output_dir (str): Job directory with prior ``TF_modeling`` outputs.
+        remote (bool): Remote execution for profiler/pwm steps.
+        verbose (bool): Logging toggle.
+
+    Returns:
+        dict: Updated dictionary or an ``error_msg`` on failure.
+    """
 
     # Initialize #
     input_file = os.path.join(output_dir, json_dict["input"]["file"])
@@ -1345,8 +1628,21 @@ root_path = config.get("Paths", "root_path")
 
 # Load the bashrc file from apache #
 
-if __name__ == "__main__":
+def main():
+    """
+    CLI entry for protein-to-DNA: initial run or ``-u`` update path.
 
+    Workflow:
+        1. Parse CLI options and load the experiment JSON.
+        2. Call ``protein_2_dna`` or ``protein_2_dna_update``.
+        3. Overwrite the input JSON with the enriched dictionary.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -1367,5 +1663,6 @@ if __name__ == "__main__":
         out.close()
 
 
+if __name__ == "__main__":
+    main()
 
- 

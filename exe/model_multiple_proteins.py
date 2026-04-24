@@ -40,8 +40,13 @@ python = os.path.join(config.get("Paths", "python_path"), "python")
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for batch protein modeling orchestration.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options controlling batch execution.
 
     """
 
@@ -78,7 +83,8 @@ def parse_options():
     group.add_option("--dimers", default=False, action="store_true", dest="dimer_mode", help="If True forces to work only with dimers; default = False)", metavar="{boolean}")
     group.add_option("--monomers", default=False, action="store_true", dest="monomer_mode", help="If True forces to work only with monomers; default = False)", metavar="{boolean}")
     group.add_option("--renumerate", default=False, dest = 'renumerate' , action = 'store_true', help = 'Flag to renumber the sequences as in the original FastA input (default is False)')
-    group.add_option("--chains_fixed",default=False, action="store_true", dest="chains_fixed", help="Replace the names of the protein chains to A-B-C-D... and DNA chains to a-b-c-d....")
+    #chains-fixed option can have problems for a large volume of data, it's better to skiup this option
+    group.add_option("--chains_fixed",default=False, action="store_true", dest="chains_fixed", help="Replace the names of the protein chains to A-B-C-D... and DNA chains to a-b-c-d.... (try to avoid this option for large data volumes)")
 
 
     parser.add_option_group(group)
@@ -101,11 +107,22 @@ def parse_options():
     return options
 
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line batch protein-modeling workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options.
+        2. Build the set of protein jobs from FASTA/threading/structure input.
+        3. Dispatch `model_protein.py` jobs sequentially or in parallel.
+        4. Iterate until all jobs are completed or timeout is reached.
+
+    Args:
+        None.
+
+    Returns:
+        None. Output models and execution logs are written to disk.
+    """
 
     # Arguments & Options #
     options   = parse_options()
@@ -211,7 +228,11 @@ if __name__ == "__main__":
             parameters =  parameters + " -p %s "%pdb_dir
             parameters =  parameters + " -l %s "%label
             parameters =  parameters + " --info %s "%info_file
-            parameters =  parameters + " --dummy %s "%dummy_dir
+            #parameters =  parameters + " --dummy %s "%dummy_dir
+            if threading: parameters =  parameters + " --dummy %s "%os.path.join(dummy_dir,os.path.basename(thread_file)+str(time.time()))
+            elif structure: parameters =  parameters + " --dummy %s "%os.path.join(dummy_dir,os.path.basename(pdb_file)+str(time.time()))
+            else: parameters =  parameters + " --dummy %s "%os.path.join(dummy_dir,os.path.basename(fasta_file)+str(time.time()))
+
             if threading: parameters = parameters + " --threading "
             if structure: parameters = parameters + " --structure "
             #None default
@@ -234,8 +255,8 @@ if __name__ == "__main__":
             if options.filter_restrictive:        parameters = parameters + " --restrictive "
             if options.no_restrict:               parameters = parameters + " --unrestrictive "
             if options.select_mode:               parameters = parameters + " --select "
-            if options.dimer_mode:                parameters = parameters + " --dimer "
-            if options.monomer_mode:              parameters = parameters + " --monomer "
+            if options.dimer_mode:                parameters = parameters + " --dimers "
+            if options.monomer_mode:              parameters = parameters + " --monomers "
             if options.renumerate:                parameters = parameters + " --renumerate "
             if options.chains_fixed:              parameters = parameters + " --chains_fixed "
             program=os.path.join(exe_path,"model_protein.py")
@@ -248,6 +269,7 @@ if __name__ == "__main__":
               submitted.add(protein)      
             else:
               if verbose: print(("\t-- Execute  %s %s" % (program,parameters)))
+              python = os.path.join(config.get("Paths", "python_path"), "python")
               os.system("%s %s %s" % (python,program,parameters))
               submitted.add(protein)      
         #Check next iteration, profiles submitted and profiles done
@@ -277,6 +299,14 @@ if __name__ == "__main__":
     #Done
     if "/tmp" not in dummy_dir and not options.verbose : shutil.rmtree(dummy_dir)
     if verbose: sys.stdout.write("Done\n")
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 
 
 

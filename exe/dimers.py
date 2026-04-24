@@ -1,3 +1,10 @@
+"""
+Identify candidate TF dimers from cleaned PDB assets and interface overlap.
+
+Used during database construction to annotate monomer/oligomer behavior based on
+protein-protein contacts and shared DNA interface regions.
+"""
+
 import os, sys, re
 import configparser
 import copy
@@ -40,9 +47,14 @@ from ModCRElib.structure.contacts import contacts
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for dimer detection.
 
+    How to run:
+        ``python dimers.py -i pdb_file -p pdb_dir [-t tfs_file -o output_file]``
+
+    Returns:
+        optparse.Values: Namespace with input structure, PDB asset directory, and
+        optional TF metadata filters.
     """
 
     parser = optparse.OptionParser("python dimers.py -i pdb_file -p pdb_dir [--dummy=dummy_dir -o output_file]")
@@ -64,6 +76,17 @@ def parse_options():
 
 def get_dimers(pdb_file, pdb_dir, tfs_file=None, homo=False, dummy_dir="/tmp"):
     """
+    Detect dimeric chain pairs in a structure using fold/family and interface criteria.
+
+    Args:
+        pdb_file (str): Input cleaned PDB path.
+        pdb_dir (str): PDB build directory (folds/interfaces/triads/helices).
+        tfs_file (str | None): Optional TF-family annotation file.
+        homo (bool): Restrict to families listed as dimerizing.
+        dummy_dir (str): Reserved for compatibility.
+
+    Returns:
+        set[tuple]: ``(chainA, chainB, n_contacts, n_overlap_bp)`` candidates.
     """
 
     # Initialize #
@@ -174,13 +197,13 @@ def get_dimers(pdb_file, pdb_dir, tfs_file=None, homo=False, dummy_dir="/tmp"):
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse options.
     options = parse_options()
 
-    # Get TMalign object #
+    # Step 2) Compute dimer candidates from contacts + interface overlap.
     dimers = get_dimers(options.input_file, options.pdb_dir, options.tfs_file, options.homo, options.dummy_dir)
 
-     # Output #
+    # Step 3) Write results to file or stdout.
     if options.output_file is not None:
         functions.write(options.output_file, "#monomerA;monomerB;contacts;overlap")
         for dimer in dimers:

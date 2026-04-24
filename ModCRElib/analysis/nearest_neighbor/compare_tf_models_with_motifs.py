@@ -69,6 +69,27 @@ def parse_options():
 
 
 def create_tf_models(omdltab,omdltmt,pwm_db,tf_families,tf_families_cisbp,tf_name_query,tf_nameseq,tf_nameseq_rev,tf_has_motif,tf_has_model,models_dir,verbose,tmp):
+      """
+      Compare one TF query model against motif databases and export TOMTOM results.
+
+      Args:
+          omdltab (str): Output summary table path.
+          omdltmt (str): Output pickle path for TOMTOM objects.
+          pwm_db (str): PWM database file path.
+          tf_families (dict): TF-to-family names map.
+          tf_families_cisbp (dict): TF-to-CisBP family-code map.
+          tf_name_query (str): Query TF identifier.
+          tf_nameseq (dict): TF name to sequence-name map.
+          tf_nameseq_rev (dict): Reverse sequence-name map.
+          tf_has_motif (dict): TF-to-reference motif map.
+          tf_has_model (dict): TF-to-model PWM map.
+          models_dir (str): Directory containing modeled PWMs.
+          verbose (bool): Verbose logging flag.
+          tmp (str): Temporary directory for TOMTOM execution.
+
+      Returns:
+          tuple[dict, dict]: Per-model score summary and TOMTOM hit objects.
+      """
       tf_models={}
       tf_mdl_tomtom={}
       if tf_name_query not in tf_has_model:
@@ -128,6 +149,16 @@ def create_tf_models(omdltab,omdltmt,pwm_db,tf_families,tf_families_cisbp,tf_nam
 
 
 def parse_tfs_motifs(input_file,pbm_dir):
+    """
+    Parse TF-to-motif mappings and build sequence lookup dictionaries.
+
+    Args:
+        input_file (str): File with TF/motif correspondences.
+        pbm_dir (str): PBM output directory containing TF sequence FASTA files.
+
+    Returns:
+        tuple[dict, dict, dict]: TF-to-motif, TF-name map, and reverse map.
+    """
     tf_has_motif={}
     tf_nameseq={}
     tf_nameseq_rev={}
@@ -150,6 +181,15 @@ def parse_tfs_motifs(input_file,pbm_dir):
     return tf_has_motif,tf_nameseq,tf_nameseq_rev
 
 def parse_tfs_models(input_models):
+    """
+    Parse TF-to-model motif relationships from an input list.
+
+    Args:
+        input_models (str): File listing TF identifiers and modeled motifs.
+
+    Returns:
+        dict: TF id to list of ``(pdb_file, motif_file)`` tuples.
+    """
 
     tf_has_model={}
     fd=open(input_models,"r")
@@ -172,6 +212,12 @@ def parse_tfs_models(input_models):
 #-------------#
 
 def main():
+    """
+    Run query-vs-model motif comparisons and export summary artifacts.
+
+    Returns:
+        None.
+    """
 
 #input:  omdltab,omdltmt,pwm_db,compared,dummy_dir,verbose,models_dir,pbm_dir,input_file,input_models,seq_dir,tf_name_query
 #create: tf_families,tf_families_cisbp,tf_nameseq,tf_nameseq_rev,tf_has_motif,tf_has_model,

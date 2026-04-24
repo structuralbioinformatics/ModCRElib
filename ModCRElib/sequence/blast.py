@@ -39,12 +39,29 @@ from SBILib.external.blast import blast_parser
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for running a BLASTP search.
 
+    How to run:
+        python blast.py -d DATABASE_FASTA -i QUERY_FASTA
+            [--dummy DUMMY_DIR --filter -o OUTPUT_FILE]
+
+    Example:
+        python blast.py -d proteins.fa -i query.fa --filter -o hits.tsv
+
+    The parser configures:
+        - Query sequence and searchable protein database.
+        - Optional twilight-zone filtering of BLAST hits.
+        - Output destination and temporary working directory.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options describing input/output paths and
+        optional filtering behavior.
     """
 
-    parser = optparse.OptionParser("python blast.py -d database_file -i input_file [--dummy=dummy_dir -f -o output_file]")
+    parser = optparse.OptionParser("python blast.py -d DATABASE_FILE -i INPUT_FILE [--dummy DUMMY_DIR -f -o OUTPUT_FILE]")
 
     parser.add_option("-d", action="store", type="string", dest="database_file", help="Database file (in FASTA format)", metavar="{filename}")
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
@@ -61,16 +78,15 @@ def parse_options():
 
 def get_blast_obj(database_file, input_file, dummy_dir="/tmp"):
     """
-    This function executes "blastpgp" from BLAST package and returns a {BlastOutput}.
+    Run `blastp` and parse the XML output into a BLAST result object.
 
-    @input:
-    database_file {string}
-    input_file {string}
-    dummy_dir {string}
+    Args:
+        database_file (str): Target protein database in FASTA format.
+        input_file (str): Query FASTA file.
+        dummy_dir (str, optional): Directory used for temporary BLAST output.
 
-    @return:
-    blast_obj {BlastOutput}
-
+    Returns:
+        BlastOutput: Parsed BLAST result object from `blast_parser`.
     """
 
     try:
@@ -94,8 +110,19 @@ def get_blast_obj(database_file, input_file, dummy_dir="/tmp"):
 # Main        #
 #-------------#
 
-if __name__ == "__main__":
+def main():
+    """
+    Run the command-line BLAST workflow for homolog discovery.
 
+    Workflow:
+        1. Parse runtime options and resolve absolute paths.
+        2. Execute BLASTP against the selected sequence database.
+        3. Optionally apply twilight-zone filtering thresholds.
+        4. Write compacted hits to file or print them to stdout.
+
+    Returns:
+        None. Compacted BLAST output is written to disk or printed.
+    """
     # Arguments & Options #
     options = parse_options()
 
@@ -118,3 +145,7 @@ if __name__ == "__main__":
         os.remove(dummy_file)
     else:
         print((blast_obj.str_compacted_blast(tz_parameter=tz_parameter, tz_type=tz_type)))
+
+
+if __name__ == "__main__":
+    main()

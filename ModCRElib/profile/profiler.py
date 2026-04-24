@@ -1,3 +1,11 @@
+"""
+Run batch DNA-binding profile calculations over a folder of models.
+
+This script organizes structural models into clusters, generates per-protein
+profiles for one or more DNA sequences, and exports aggregated summaries and
+comparisons across the successfully computed profiles.
+"""
+
 import os, sys, re
 from collections import Counter
 import configparser
@@ -59,6 +67,15 @@ from ModCRElib.profile import profile as PROFILE
 #-------------#
 
 def done_profiles(info_file):
+    """
+    Read the set of profile names already marked as completed.
+
+    Args:
+        info_file (str): Summary file storing profile execution status.
+
+    Returns:
+        set: Names of profiles recorded in the status file.
+    """
     done=set()
     if not functions.fileExist(info_file): return done
     info=open(info_file,"r")
@@ -69,14 +86,47 @@ def done_profiles(info_file):
     return done
 
 def check_submitted(submitted,pdb_files):
+    """
+    Check whether there are still PDB files left to submit.
+
+    Args:
+        submitted (set): Profile identifiers already submitted.
+        pdb_files (set): All candidate PDB or threading input files.
+
+    Returns:
+        bool: ``True`` when at least one file has not yet been submitted.
+    """
     if len(submitted)>0: return (pdb_files!=pdb_files.intersection(submitted))
     else: return True
 
 def check_done(done,name_of_profiles):
+    """
+    Check whether there are still profiles left to finish.
+
+    Args:
+        done (set): Profile identifiers already marked as done.
+        name_of_profiles (set): Full set of expected profile names.
+
+    Returns:
+        bool: ``True`` when at least one profile is still pending.
+    """
     if len(done)>0: return (name_of_profiles != name_of_profiles.intersection(done))
     else: return True
 
 def classify_pdbs(pdb_files):
+    """
+    Group protein models into coarse clusters based on residue span overlap.
+
+    Monomeric and dimeric naming schemes are processed separately, then merged
+    into a final ordered cluster mapping used to organize profiler outputs.
+
+    Args:
+        pdb_files (iterable): Collection of input PDB filenames.
+
+    Returns:
+        dict: Mapping from cluster index to sets of tuples describing each
+        model and its inferred residue-span coordinates.
+    """
 
     class_monomer=[]
     class_dimer=[]
@@ -255,6 +305,30 @@ def classify_pdbs(pdb_files):
     return cluster_ordered
 
 def calculate_protein_profiles(info_file,pdb_files,name_of_profiles,label,output_dir,input_folder,dna_file,thresholds, energy_profile,pdb_file,pbm_dir,pdb_dir,families,potential_file, radius,fragment_restrict, binding_restrict, split_potential,auto_mode,family_potentials,pbm_potentials,score_threshold,taylor_approach,pmf,bins,known,meme,reset, refine, dummy_dir,verbose,save,reuse,redofimo,complete,methylation=False): 
+    """
+    Run or reuse per-protein profile calculations for all DNA/model pairs.
+
+    The function iterates over every requested DNA sequence and input model,
+    reuses cached PWM/profile artifacts when possible, optionally submits
+    cluster jobs for parallel execution, and records completed profiles in the
+    shared status file.
+
+    Args:
+        info_file (str): Status file used to track successful profile runs.
+        pdb_files (set): Input model or threading filenames to process.
+        name_of_profiles (set): Expected output profile identifiers.
+        label (str or None): Optional suffix added to output names.
+        output_dir (str): Directory where profile artifacts are stored.
+        input_folder (str): Directory containing the input models.
+        dna_file (str): FASTA file with DNA sequences to scan.
+        thresholds (list): FIMO thresholds used to compute profile tracks.
+        energy_profile (str): Statistical potential used for scoring output.
+        complete (float): Completion ratio used to stop long-running batches.
+        methylation (bool): Whether methylated bases should be preserved.
+
+    Returns:
+        set: Names of profiles marked as done in the status file.
+    """
 
     # get dena sequences 
     dna_sequences=get_dna_sequences(input_folder,dna_file)
@@ -457,6 +531,18 @@ def calculate_protein_profiles(info_file,pdb_files,name_of_profiles,label,output
     return done
 
 def get_dna_sequences(input_folder,dna_file):
+    """
+    Split a multi-FASTA DNA input into per-sequence FASTA files.
+
+    Args:
+        input_folder (str): Directory where temporary per-sequence FASTA files
+            will be written.
+        dna_file (str): FASTA file containing one or more DNA sequences.
+
+    Returns:
+        list: Tuples of ``(dna_name, dna_sequence, fasta_path)`` describing the
+        generated sequence-specific input files.
+    """
     dna_sequences=[] 
     n_dna=0
     for header, sequence in functions.parse_fasta_file(dna_file):
@@ -479,9 +565,36 @@ def get_dna_sequences(input_folder,dna_file):
 #-------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse command-line options for batch profile generation.
+
+    How to run:
+        python profiler.py [--dummy DUMMY_DIR] -i INPUT_FOLDER -d DNA_FASTA
+            [--pbm PBM_DIR --pdb PDB_DIR -o OUTPUT_NAME -l LABEL]
+            [--save --plot --html --parallel --threading -v]
+            [statistical potential options]
+
+    Example:
+        python profiler.py -i models/ -d dna.fa --pbm pbm_data --pdb pdb_data
+            -o run_profile --plot -v
+
+    The parser configures:
+        - Input model folder and DNA FASTA targets.
+        - PBM/PDB resources and output naming/report files.
+        - Execution/report options (threading, plotting, html, reuse flags).
+        - Statistical-potential controls (auto/family/pbm/split thresholds).
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options controlling inputs, outputs,
+        plotting, execution mode, and statistical-potential settings.
+
+    Raises:
+        SystemExit: Triggered by ``OptionParser`` when arguments are missing or
+        invalid.
+    """
 
     parser = optparse.OptionParser("Usage: profiler.py [--dummy=DUMMY_DIR] -i INPUT_FOLDER  -d DNA_FASTA [-l LABEL -o OUTPUT_NAME --info INFO_FILE --complete COMPLETE ] --pbm=PBM_dir --pdb=PDB_DIR [-v --save --plot --meme --reset] [--html --html_types HTML_SCORE_TYPES --html_energies HTML_ENERGIES]  [ --parallel --model_accuracy ] [-a -f -p -s SPLIT_POTENTIAL -e ENERGY_PROFILE -t THRESHOLD -k -b --taylor --file POTENTIAL --radius RADIUS --pmf --fragment FRAGMENT]")
 
@@ -548,7 +661,22 @@ def parse_options():
 # Main        #
 #-------------#
 
-if __name__ == "__main__":
+def main():
+    """
+    Run the batch profile-generation workflow for one input folder.
+
+    Workflow:
+        1. Parse command-line options and resolve resource/output paths.
+        2. Build DNA-specific profiles across input models/threading files.
+        3. Export per-DNA profile tables, optional plots, and pairwise comparisons.
+        4. Record completion and cleanup temporary files when needed.
+
+    Args:
+        None.
+
+    Returns:
+        None. Output files are written to the selected output directory.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -850,3 +978,6 @@ if __name__ == "__main__":
 
     if verbose: print("Done")
 
+
+if __name__ == "__main__":
+    main()

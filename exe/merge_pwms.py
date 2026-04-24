@@ -1,3 +1,12 @@
+"""
+Merge a main DNA PWM with one or more additional PWMs using TOMTOM alignment.
+
+This module contains the core implementation used by the PWM-merging command
+line scripts. It can align two motifs, optionally refine the structure-anchored
+region with ModCRE statistical potentials, reconstruct full merged motifs, and
+write the resulting representations to disk.
+"""
+
 import os, sys, re
 from collections import Counter
 import configparser
@@ -61,11 +70,15 @@ if maxsize < 1000: maxsize=1000
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
-    database tomtom = main
-    target tomtom = second
+    Parse the command line options for PWM-merging workflows.
 
+    The main PWM acts as the TOMTOM anchor motif, while the PWM list supplies
+    the motifs that will be aligned and merged against it.
+
+    Returns:
+        optparse.Values: Parsed CLI options describing input motifs, structural
+        model, output mode, queueing options, and statistical-potential
+        settings.
     """
 
     parser = optparse.OptionParser("python merge_pwm.py -i input_main_pwm -j input_add_pwm -w weight [-o output_file --dummy dummy_dir -w weight --pbm pbm_dir --pdb pdb_dir  --refine refine ]  ")
@@ -119,7 +132,40 @@ def parse_options():
 #-------------#
 
 def merge_two_pwm(main_pwm, second_pwm, weight, refine, significance, input_threading_file, input_pdb_file, pdb_dir, pbm_dir, threading, fragment_restrict, binding_restrict, output_file, families, radius, potential_file, split_potential,  auto_mode,  family_potentials,  pbm_potentials,  score_threshold,  taylor_approach,  pmf, bins_approach, known,   methylation, dummy_dir, verbose):
+    """
+    Align and merge one secondary PWM into a main PWM.
 
+    The two motifs are first compared with TOMTOM to obtain the best offset,
+    strand, overlap, and significance. If the hit passes the p-value cutoff,
+    both PWMs are merged into a full-length motif. Optionally, the region tied
+    to the structural model is refined with the ModCRE scoring machinery.
+
+    Args:
+        main_pwm (str): Path to the main PWM in MEME format.
+        second_pwm (str): Path to the second PWM in MEME format.
+        weight (float): Relative weight assigned to the second PWM.
+        refine (int): Refinement level for the structure-anchored region.
+        significance (float): Maximum TOMTOM p-value allowed for merging.
+        input_threading_file, input_pdb_file (str | None): Structural input
+            describing the main PWM context.
+        pdb_dir, pbm_dir (str | None): ModCRE data directories.
+        threading (bool): Whether the structural input is a threading file.
+        fragment_restrict, binding_restrict: Optional structural restrictions.
+        output_file (str): Output prefix used for temporary TOMTOM output and
+            derived motif names.
+        families (dict): Mapping used for family-specific potentials.
+        radius, potential_file, split_potential, auto_mode, family_potentials,
+        pbm_potentials, score_threshold, taylor_approach, pmf, bins_approach,
+        known, methylation, dummy_dir, verbose: Additional ModCRE workflow
+        parameters forwarded to refinement helpers.
+
+    Returns:
+        tuple: ``(result_full_pwm, msa_obj, over5, overlap)`` where
+        ``result_full_pwm`` is the full merged motif, ``msa_obj`` is the main
+        structure-anchored section, ``over5`` is the 5' overlap start in the
+        merged motif, and ``overlap`` is the TOMTOM overlap length.
+        If TOMTOM significance is not sufficient, returns ``(None, None, offset, overlap)``.
+    """
 
     # Compare the PWMs
     tomtom_results=tomtom.get_tomtom_obj(main_pwm,second_pwm,dummy_dir)
@@ -274,6 +320,21 @@ def merge_two_pwm(main_pwm, second_pwm, weight, refine, significance, input_thre
 
 
 def write_pwm(msa_obj,folder,output_name,meme,dummy_dir,verbose):
+    """
+    Write a merged motif to the standard ModCRE output formats.
+
+    Args:
+        msa_obj (PWM.nMSA): Motif object to write.
+        folder (str): Output directory.
+        output_name (str): Output prefix without extension.
+        meme (bool): If True, also export the MEME-suite ``.meme.s`` variant.
+        dummy_dir (str): Temporary directory for helper files.
+        verbose (bool): If True, print progress messages.
+
+    Returns:
+        None. Writes ``.pwm``, ``.meme``, ``.msa``, optional ``.meme.s``, and
+        logo PNG files.
+    """
 
     pwm_file = os.path.join(folder,output_name+".pwm")
     meme_file = os.path.join(folder,output_name+".meme.s")
@@ -322,6 +383,23 @@ def write_pwm(msa_obj,folder,output_name,meme,dummy_dir,verbose):
  
 
 def get_single_pwm(options, input_file=None, output_file=None):
+    """
+    Merge one main PWM against all PWMs listed in the provided manifest.
+
+    For each candidate PWM, the function attempts a TOMTOM-guided merge through
+    :func:`merge_two_pwm`. The significant merged motifs are then combined into
+    a consensus output PWM and written to disk.
+
+    Args:
+        options (optparse.Values): Parsed CLI options.
+        input_file (str | None): Optional path overriding ``options.main_pwm``.
+        output_file (str | None): Optional output prefix overriding
+            ``options.output_file``.
+
+    Returns:
+        None. Writes the combined merged motif to disk when enough significant
+        merges are found.
+    """
 
     # Initialize #
 
@@ -476,12 +554,17 @@ def get_single_pwm(options, input_file=None, output_file=None):
     else:
         sys.stdout.write("Not enough files to be merged\n")
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line PWM-merging workflow.
 
-if __name__ == "__main__":
+    The script supports both single-run mode and batch/parallel processing over
+    directories of models and PWMs. In both cases it delegates the actual
+    motif-merging logic to :func:`get_single_pwm`.
 
+    Returns:
+        None. Output motifs and execution logs are written to disk.
+    """
     # Arguments & Options #
     options = parse_options()
     if os.path.isdir(options.main_pwm) and os.path.isdir(options.model):
@@ -675,5 +758,12 @@ if __name__ == "__main__":
 
     sys.stdout.write("Done")
 
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 
 

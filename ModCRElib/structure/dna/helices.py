@@ -40,12 +40,17 @@ from ModCRElib.structure.dna import x3dna
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for protein-chain to DNA-helix assignment.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for input/output paths.
 
     """
 
-    parser = optparse.OptionParser("python helix.py -i input_file [--dummy=dummy_dir -o output_file]")
+    parser = optparse.OptionParser("python helices.py -i INPUT_FILE [--dummy DUMMY_DIR -o OUTPUT_DIR]")
 
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
     parser.add_option("-i", action="store", type="string", dest="input_file", help="Input file (in PDB format)", metavar="{filename}")
@@ -60,17 +65,32 @@ def parse_options():
 
 def get_protein_chains_dna_helices(pdb_obj, x3dna_obj, contacts_obj, output_dir="./", dummy_dir="/tmp"):
     """
-    This function identifies the DNA helix that is more likely to interact
-    with each {ChainOfProtein} within a {PDB} file. For each {ChainOfProtein},
-    it writes the resulting helix in an individual file.
-
-    @input:
-    pdb_obj {PDB}
-    x3dna_obj {X3DNA}
-    contacts_obj {Contacts}
-    dummy_dir {string}
-
-    """
+        Assign the most-contacted DNA helix to each protein chain.
+    
+        In this script, a DNA helix is defined as a contiguous nucleotide polymer
+        segment together with its complementary strand, forming a double-stranded
+        DNA helix.
+    
+        For every protein chain in `pdb_obj`, the function counts contacts against
+        helix-associated dinucleotides and writes the top supported helix to
+        `<pdbid>_<chain>.txt` in `output_dir`.
+    
+        Args:
+            pdb_obj (PDB): Input PDB structure.
+            x3dna_obj (X3DNA): Parsed DNA basepair/helix annotations.
+            contacts_obj (Contacts): Precomputed protein-DNA contacts.
+            output_dir (str, optional): Destination directory for helix files.
+            dummy_dir (str, optional): Reserved temporary directory argument.
+    
+        Returns:
+            None.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        x3dna_obj (Any): DNA identifier, sequence, or DNA-related data.
+        contacts_obj (Any): Contact object/data used by this routine.
+        output_dir (Any): Directory path used by this operation.
+        dummy_dir (Any): Directory path used by this operation."""
 
     # Initialize #
     max_contact_distance = float(config.get("Parameters", "max_contact_distance"))
@@ -107,11 +127,21 @@ def get_protein_chains_dna_helices(pdb_obj, x3dna_obj, contacts_obj, output_dir=
             functions.write(helix_file, str(helix))
             break
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line DNA-helix assignment workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options.
+        2. Build PDB, X3DNA, and contact objects.
+        3. Write one best helix assignment per protein chain.
+
+    Args:
+        None.
+
+    Returns:
+        None. Helix assignment files are written to the output directory.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -127,3 +157,11 @@ if __name__ == "__main__":
 
     # Get protein chains DNA helices #
     get_protein_chains_dna_helices(pdb_obj, x3dna_obj, contacts_obj, os.path.abspath(options.output_dir), os.path.abspath(options.dummy_dir))
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()

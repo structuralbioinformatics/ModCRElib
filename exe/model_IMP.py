@@ -32,12 +32,19 @@ import IMP
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for one IMP macro-complex modelling run.
 
+    The parser defines the prepared input folder, model identifier, output
+    rootname, and optional bookkeeping log.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options controlling IMP execution.
     """
 
-    parser = optparse.OptionParser("python model_IMP.py -i input_folder -m model_name  -o output [--info log_file]")
+    parser = optparse.OptionParser("python model_IMP.py -i INPUT_FOLDER -m MODEL_NAME -o OUTPUT [--info LOG_FILE]")
 
     parser.add_option("-i", action="store", type="string", dest="input_folder", default=None, help="Input folder, contains the inputs of topology and restraints to model macro-complexes", metavar="{directory}")
     parser.add_option("-m", action="store", type="string", dest="model_name", default=None, help="Name of the model", metavar="{filename}")
@@ -59,6 +66,18 @@ def parse_options():
 #-------------#
 
 if __name__ == "__main__":
+    """
+    Main workflow for one IMP modelling run.
+
+    It reads one topology/restraint set, runs IMP sampling, and stores the
+    resulting model outputs while updating the execution info log.
+
+    Args:
+        None.
+
+    Returns:
+        None. IMP outputs and status entries are written to disk.
+    """
 
     # Arguments & Options #
     options   = parse_options()

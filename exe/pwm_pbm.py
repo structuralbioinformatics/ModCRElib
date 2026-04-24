@@ -61,11 +61,27 @@ if maxsize < 5000: maxsize=5000
 
 class MSA(object):
     """
-    This class defines a {MSA} object.
+    Generic motif container for alignments and position-weight matrices.
 
+    An :class:`MSA` instance can represent either:
+
+    - a set of scored sequences (alignment-like view), or
+    - a PWM/PFM-like matrix over a residue alphabet.
+
+    The class supports reading and writing several on-disk formats used in the
+    ModCRE workflows: ``msa``, ``pwm``, ``meme``, and ``txt``.
     """
     residues = []
     def __init__(self, file_name=None, motif_name=None, option="msa",gz=False):
+        """
+        Create a motif object and optionally parse an input file.
+
+        Args:
+            file_name (str | None): Path to an input motif file.
+            motif_name (str | None): Optional motif identifier.
+            option (str): Input format: ``msa``, ``pwm``, ``meme``, or ``txt``.
+            gz (bool): If True, treat the input file as gzipped.
+        """
         self._file = file_name
         if motif_name is not None:
            self._motif= motif_name
@@ -90,6 +106,12 @@ class MSA(object):
             self._parse_file()
 
     def _parse_file(self):
+        """
+        Parse ``self._file`` according to ``self._option``.
+
+        Returns:
+            None. Populates the internal sequence set and/or PWM in place.
+        """
         option=self._option
         gz    =self._gzip
         if option != "msa" and option != "pwm" and option != "meme" and option != "txt":
@@ -173,6 +195,15 @@ class MSA(object):
            self.set_binding_site_length(len(self._pwm))
 
     def __add__(self,other):
+        """
+        Concatenate two motifs end-to-end.
+
+        Args:
+            other (MSA): Motif to append after the current one.
+
+        Returns:
+            MSA: New motif with concatenated PWMs.
+        """
         x=self.__class__()
         x.set_motif(self.get_motif()+"_"+other.get_motif())
         x._pwm.extend(self.get_pwm())
@@ -182,10 +213,27 @@ class MSA(object):
         return x
 
     def extend_residues(self,new_list):
+        """
+        Extend the residue alphabet used by this motif.
+
+        Args:
+            new_list (list[str]): Residues to append to ``self.residues``.
+        """
         self.residues.extend(new_list)
 
-    def enhance(self):
+    def enhance(self,nonzero=False):
+        """
+        Normalize and sharpen PWM columns heuristically.
+
+        Args:
+            nonzero (bool): If True, replace near-zero columns by a uniform
+                distribution over the residue alphabet.
+
+        Returns:
+            None. Updates ``self._pwm`` in place.
+        """
         pwm=[]
+        epsilon=1.0e-6
         for vector in self._pwm:
             maxi=max([float(x) for x in vector])
             mini=min([float(x) for x in vector])
@@ -197,10 +245,33 @@ class MSA(object):
                   suma=sum([float(x)-mini for x in vector])
                   for j in range(len(self.get_residues())):
                       v.append("%8.4f"%((float(vector[j]) - mini)/suma))
-            pwm.append(v)
+            mini=min([float(x) for x in v])          
+            maxi=max([float(x) for x in v])
+            if maxi<epsilon and nonzero:
+               v=[]
+               ran=1.0/len(self.get_residues())
+               for j in range(len(self.get_residues())): v.append("%8.4f"%(ran))
+            w=[]
+            suma=sum([float(x) for x in v])
+            if suma > 0:
+               for j in range(len(self.get_residues())):
+                   w.append("%8.4f"%((float(v[j]))/suma))
+            else:
+               for j in range(len(self.get_residues())):
+                   w.append("%8.4f"%(float(v[j])))
+            pwm.append(w)
         self._pwm=pwm 
 
     def combine(self,pwm_list):
+        """
+        Average this PWM with other PWMs of the same length.
+
+        Args:
+            pwm_list (list[MSA]): Motifs whose PWMs should be combined.
+
+        Returns:
+            MSA: New motif containing the average PWM.
+        """
         x=self.__class__()
         x.set_motif(self.get_motif()+"_combine")
         pwm_a=self.get_pwm()
@@ -228,6 +299,16 @@ class MSA(object):
         return x
 
     def overlap(self,other,overlap):
+        """
+        Merge two motifs with a fixed overlapping region.
+
+        Args:
+            other (MSA): Second motif to combine.
+            overlap (int): Number of columns that overlap.
+
+        Returns:
+            MSA: New motif with averaged overlap and concatenated flanks.
+        """
         x=self.__class__()
         x.set_motif(self.get_motif()+"_"+other.get_motif())
         pwm_a=self.get_pwm()
@@ -244,6 +325,18 @@ class MSA(object):
         return x
 
     def difference(self,other,overlap=None,enhance=False):
+        """
+        Build a PWM emphasizing positions enriched in this motif vs. another.
+
+        Args:
+            other (MSA): Reference motif to subtract.
+            overlap (int | None): Number of overlapping positions. Defaults to
+                the full length of this motif.
+            enhance (bool): If True, normalize the result with :meth:`enhance`.
+
+        Returns:
+            MSA: New differential motif.
+        """
         x=self.__class__()
         x.set_motif(self.get_motif()+"_"+other.get_motif())
         pwm_a=self.get_pwm()
@@ -354,6 +447,16 @@ class MSA(object):
         return x
 
     def section(self,start=0,end=0):
+        """
+        Extract a contiguous submotif.
+
+        Args:
+            start (int): Start position, inclusive.
+            end (int): End position, exclusive. ``0`` means until the end.
+
+        Returns:
+            MSA: New motif restricted to the selected interval.
+        """
         x=self.__class__()
         if end==0:end=len(self._pwm)
         x.set_motif(self.get_motif())
@@ -364,9 +467,23 @@ class MSA(object):
         return x
 
     def add_sequence(self, sequence, score):
+        """
+        Add one scored sequence to the motif.
+
+        Args:
+            sequence (str): Sequence string.
+            score (float): Associated sequence score.
+        """
         self._sequences.add((sequence, score))
 
     def set_binding_site_length(self,length=0):
+        """
+        Set or infer the motif length.
+
+        Args:
+            length (int): Explicit length. If ``0``, infer it from the stored
+                sequences.
+        """
         if length == 0:
            binding = list(zip(*[i for i in self.get_sequences()]))
            self._binding_site_length = len(binding)
@@ -374,15 +491,34 @@ class MSA(object):
            self._binding_site_length = length
 
     def set_motif(self,name):
+        """
+        Set the motif name.
+
+        Args:
+            name (str): Motif identifier, optionally including common suffixes.
+        """
         if name.endswith(".msa"):name.rstrip(".msa")
         if name.endswith(".pwm"):name.rstrip(".pwm")
         if name.endswith(".txt"):name.rstrip(".txt")
         if name.endswith(".meme"):name.rstrip(".meme")
         self._motif=name
 
-    def set_pwm(self):
-        self._pwm=[]
-        if len(self._sequences)>0:
+    def set_pwm(self,pwm=None):
+        """
+        Set the PWM directly or derive it from stored sequences.
+
+        Args:
+            pwm (list | None): PWM matrix to assign directly. If ``None``,
+                build the PWM from ``self._sequences`` using pseudocounts.
+
+        Returns:
+            None. Updates ``self._pwm`` in place.
+        """
+        if pwm is not None:
+         self._pwm=pwm
+        if pwm is None:
+         self._pwm=[]
+         if len(self._sequences)>0:
            pfm = []
            binding = list(zip(*[i[0] for i in self.get_sequences()]))
            self._binding_site_length = len(binding)
@@ -401,6 +537,16 @@ class MSA(object):
              self._pwm.append(vector)                           
 
     def set_sequences(self,maxsi=None):
+        """
+        Generate a synthetic sequence set from the current PWM.
+
+        Args:
+            maxsi (int | None): Optional target number of sequences before the
+                alphabet-size multiplier is applied.
+
+        Returns:
+            None. Populates ``self._sequences`` in place.
+        """
         if self._sequences is None or len(self._sequences)<=0: self._sequences=set()
         if self._pwm is None: return None
         if not isinstance(maxsi,int):
@@ -414,6 +560,7 @@ class MSA(object):
            number_of_sequences=self._max_sequences[3]
         else:
            number_of_sequences = maxsi
+        number_of_sequences = number_of_sequences * len(self.get_residues())   
         if len(self._sequences) <= 0 and len(self._pwm)>0:
            sequence_residue=[]
            if len(self._pwm) != self.get_binding_site_length(): self.set_binding_site_length(len(self._pwm))
@@ -426,6 +573,11 @@ class MSA(object):
                        vector.append(0)
                sequence_residue.append(vector)
            done=(sum([sum([n for n in sequence_residue[i]]) for i in range(self.get_binding_site_length())]) == 0 )
+           null_position=set()
+           for i in range(self.get_binding_site_length()):
+               done_position = (sum([n for n in sequence_residue[i]]) == 0)
+               if done_position:
+                  null_position.add(i)
            s=0
            while s < number_of_sequences:
                seq=""
@@ -439,9 +591,9 @@ class MSA(object):
                        jjj=float(jj+nr)/float(len(self.get_residues()))
                        j=jj+nr-int(jjj)*len(self.get_residues())
                        base = self.residues[j]
-                       if dummy[i][j]>0:
+                       if dummy[i][j]>0 or i in null_position:
                           seq = seq + base
-                          dummy[i][j] = dummy[i][j] - 1
+                          dummy[i][j] = max(0,dummy[i][j] - 1)
                           add_one = False
                if (len(seq)==self.get_binding_site_length()):
                  if (seq,1.0) not in self.get_sequences():
@@ -452,13 +604,15 @@ class MSA(object):
                  else:
                     if counter > 100:
                        sc=min([float(x[1]) for x in self.get_sequences()])
-                       self.add_sequence(seq,sc-0.001/(s+1))
+                       self.add_sequence(seq,sc-0.01/(s+1))
                        counter=0
                        s = s+1
                        sequence_residue = dummy[:]
                     else:
                        counter = counter +1
+               done=(sum([sum([n for n in sequence_residue[i]]) for i in range(self.get_binding_site_length())]) == 0 )
                for i in range(self.get_binding_site_length()):
+                 if i in null_position: continue
                  if done: continue
                  if not done:
                     done = (sum([n for n in sequence_residue[i]]) == 0)
@@ -466,6 +620,13 @@ class MSA(object):
 
 
     def get_main_sequence(self):
+        """
+        Return the consensus-like sequence implied by the PWM.
+
+        Returns:
+            str: Sequence built from the highest-probability residue in each
+            position.
+        """
         if len(self._pwm)<=0:
             self.set_pwm()
         main=""
@@ -486,12 +647,15 @@ class MSA(object):
         return main
 
     def clean_pwm(self):
+        """Remove all PWM columns from the motif."""
         self._pwm=[]
 
     def get_pwm(self):
+        """Return the PWM matrix."""
         return self._pwm
 
     def get_motif(self):
+        """Return the motif name."""
         name=self._motif
         if name.endswith(".msa"):name.rstrip(".msa")
         if name.endswith(".pwm"):name.rstrip(".pwm")
@@ -500,21 +664,32 @@ class MSA(object):
         return name
 
     def get_option(self):
+        """Return the input/output format associated with the motif."""
         return self._option
 
     def get_residues(self):
+        """Return the residue alphabet used by the motif."""
         return self.residues
 
     def get_sequences(self):
+        """Return the set of stored ``(sequence, score)`` pairs."""
         return self._sequences
 
     def clean_sequences(self):
+        """Remove all stored sequences."""
         self._sequences=set()
 
     def get_binding_site_length(self):
+        """Return the motif length."""
         return  self._binding_site_length
 
     def trim_pwm(self):
+        """
+        Trim uniform-background columns from both PWM ends.
+
+        Returns:
+            None. Updates ``self._pwm`` in place.
+        """
         trim = True
         freq=1.0/len(self.residues)
         vector=[]
@@ -530,6 +705,12 @@ class MSA(object):
                 trim = False
 
     def information_content(self):
+        """
+        Compute a simple information-content-like quantity from the PWM.
+
+        Returns:
+            float: Entropy-based score over all PWM cells.
+        """
         try:
           x=numpy.array(self._pwm)
           pwm=x.astype(numpy.float)
@@ -544,6 +725,17 @@ class MSA(object):
         return ic
 
     def write(self, file_name=None, option="msa", overwrite=False):
+        """
+        Write the motif to disk in one of the supported formats.
+
+        Args:
+            file_name (str): Output file path.
+            option (str): Output format: ``msa``, ``pwm``, or ``meme``.
+            overwrite (bool): If True, remove an existing file first.
+
+        Returns:
+            None. Writes the selected representation to ``file_name``.
+        """
         #If overwrite a file
         if overwrite == True:
             os.system("rm -f " + file_name)
@@ -590,15 +782,37 @@ class MSA(object):
             raise ValueError("No DNA sequences bound!")
 
 class nMSA(MSA):
+    """
+    DNA specialization of :class:`MSA` using the alphabet ``A/C/G/T``.
+
+    This subclass is the main motif container used by the DNA-binding workflows
+    in this module. It can parse/write the same formats as :class:`MSA` and adds
+    helpers specific to nucleotide motifs, such as reverse-complement generation.
+    """
     residues = list("ACGT")
     def __init__(self,file_name=None, motif_name=None, option="msa"):
+      """Create a DNA motif container.
+
+      Args:
+          file_name (str | None): Optional file to parse immediately.
+          motif_name (str | None): Optional motif identifier.
+          option (str): Input format, typically ``msa``, ``pwm``, ``meme``, or ``txt``.
+      """
       self._nucleotides = self.residues
       self._max_sequences=(100,250,500,maxsize)
       self._min_binding_site_length=(4,6,8)
       super(nMSA,self).__init__(file_name, motif_name, option)
     def get_nucleotides(self):
+      """Return the nucleotide alphabet used by this class."""
       return self._nucleotides
     def get_complementary(self):
+      """
+      Build the reverse-complement motif as a new :class:`nMSA`.
+
+      Returns:
+          nMSA: A new object with complemented residues, reversed columns,
+          updated motif name, and synthesized sequences.
+      """
       x=self.__class__()
       index_complementary={}
       for j in range(len(self.get_residues())):
@@ -626,14 +840,28 @@ class nMSA(MSA):
 
 
 class pMSA(MSA):
+    """
+    Protein specialization of :class:`MSA`.
+
+    This subclass stores motifs over the 20 standard amino acids and is used by
+    protein-logo generation and related workflows.
+    """
     residues = list("ACDEFGHIKLMNPQRSTVWY")
     def __init__(self,file_name=None, motif_name=None, option="msa"):
+      """Create a protein motif container.
+
+      Args:
+          file_name (str | None): Optional file to parse immediately.
+          motif_name (str | None): Optional motif identifier.
+          option (str): Input format, typically ``msa``, ``pwm``, ``meme``, or ``txt``.
+      """
       self._aminoacids = self.residues
       self._max_sequences=(100,500,1000,maxsize)
       self._min_binding_site_length=(4,8,10)
       self._option=option
       super(pMSA,self).__init__(file_name, motif_name,option)
     def get_aminoacids(self):
+        """Return the amino-acid alphabet used by this class."""
         return self._aminoacids
 
 
@@ -941,6 +1169,26 @@ def load_statistical_potentials(pdb_obj, pdb_dir, pbm_dir, families, radius_defa
     return potentials, thresholds, radii, structural_homologs_by_chain
 
 def get_msa_obj(triads_obj, x3dna_obj, potentials, radii, fragment_restrict, binding_restrict, split_potential, thresholds, methylation=False ):
+    """
+    Build a DNA :class:`nMSA` from protein-DNA triads and statistical potentials.
+
+    The function scores contacting dinucleotides for each protein chain, converts
+    them into scaled k-mer scores, and assembles the accepted k-mers into a motif.
+
+    Args:
+        triads_obj: Triads container describing protein-DNA contacts.
+        x3dna_obj: X3DNA-derived DNA geometry/sequence helper.
+        potentials (dict): Statistical potentials keyed by protein chain.
+        radii (dict): Contact cutoffs keyed by protein chain.
+        fragment_restrict (dict | None): Optional protein residue intervals by chain.
+        binding_restrict (list | None): Optional nucleotide intervals to keep.
+        split_potential (str): Potential family/mode to evaluate.
+        thresholds (dict): Minimum scaled score to keep per protein chain.
+        methylation (bool): If True, extend the nucleotide alphabet with methylation symbols.
+
+    Returns:
+        nMSA: Motif object containing the assembled sequences and PWM.
+    """
 
     # Initialize #
     msa_obj = nMSA()
@@ -1022,6 +1270,23 @@ def get_msa_obj(triads_obj, x3dna_obj, potentials, radii, fragment_restrict, bin
 
 def get_scores_and_binding_site(triads_obj, x3dna_obj, potentials, radii, fragment_restrict, binding_restrict, split_potential, pdb_chain,methylation=False):
     """
+    Score all valid protein-DNA triads for one protein chain.
+
+    Args:
+        triads_obj: Triads container with protein-DNA contacts.
+        x3dna_obj: X3DNA-derived DNA helper object.
+        potentials (dict): Statistical potentials keyed by protein chain.
+        radii (dict): Contact cutoffs keyed by chain.
+        fragment_restrict (dict | None): Optional residue intervals to keep.
+        binding_restrict (list | None): Optional nucleotide intervals to keep.
+        split_potential (str): Potential family/mode to evaluate.
+        pdb_chain (str): Protein chain to analyze.
+        methylation (bool): If True, allow methylated nucleotide symbols.
+
+    Returns:
+        tuple: ``(scores, binding_site)`` where ``scores`` stores raw scores per
+        dinucleotide/environment and ``binding_site`` stores contributing triads
+        per contacted dinucleotide.
     """
 
     # Initialize #
@@ -1276,6 +1541,17 @@ def scale(score, max_score, min_score, max_scaled_score=1.0, min_scaled_score=0.
       return 0.0
 
 def write_pwm_by_meme(msa_obj,output_file,dummy_dir="/tmp"):
+    """
+    Export a motif to MEME format using `uniprobe2meme` when available.
+
+    Args:
+        msa_obj (MSA): Motif object to export.
+        output_file (str): Destination MEME file.
+        dummy_dir (str): Temporary directory used to write an intermediate PWM.
+
+    Returns:
+        None. The MEME file is written to ``output_file``.
+    """
     src_path=config.get("Paths","src_path")
     meme_path = os.path.join(src_path, config.get("Paths", "meme_path"))
     label=output_file.split("/")[-1]
@@ -1299,6 +1575,18 @@ def write_pwm_by_meme(msa_obj,output_file,dummy_dir="/tmp"):
 
 
 def write_logo(msa_obj,logo_file,dummy_dir="/tmp"):
+    """
+    Generate forward and reverse-complement DNA logos with WebLogo.
+
+    Args:
+        msa_obj (MSA): DNA motif object. If it contains no sequences, synthetic
+            sequences are generated from the PWM first.
+        logo_file (str): Output prefix.
+        dummy_dir (str): Temporary directory for the FASTA file passed to WebLogo.
+
+    Returns:
+        None. Writes ``<logo_file>.fwd.png`` and ``<logo_file>.rev.png``.
+    """
     #Initialize programs
     src_path=config.get("Paths","src_path")
     meme_path = os.path.join(src_path, config.get("Paths", "meme_path"))
@@ -1336,6 +1624,18 @@ def write_logo(msa_obj,logo_file,dummy_dir="/tmp"):
     if os.path.exists(fasta_file): os.remove(fasta_file)
 
 def write_protein_logo(msa_obj,logo_file, dummy_dir="/tmp"):
+    """
+    Generate a protein logo with WebLogo.
+
+    Args:
+        msa_obj (MSA): Protein motif object. If it contains no sequences,
+            synthetic sequences are generated from the PWM first.
+        logo_file (str): Output prefix.
+        dummy_dir (str): Temporary directory for the FASTA file passed to WebLogo.
+
+    Returns:
+        None. Writes ``<logo_file>.png``.
+    """
     #Initialize programs
     src_path=config.get("Paths","src_path")
     meme_path = os.path.join(src_path, config.get("Paths", "meme_path"))
@@ -1377,6 +1677,19 @@ def write_protein_logo(msa_obj,logo_file, dummy_dir="/tmp"):
 
 
 def get_score_for_subseq(binding_site, x3dna_obj, dna_sequence, potentials,  split_potential):
+    """
+    Score one DNA sequence against a binding site model.
+
+    Args:
+        binding_site (dict): Triads grouped by contacted dinucleotide.
+        x3dna_obj: X3DNA helper used to map dinucleotides onto sequence positions.
+        dna_sequence (str): Candidate DNA sequence to score.
+        potentials (dict): Statistical potentials keyed by protein chain.
+        split_potential (str): Potential family/mode to evaluate.
+
+    Returns:
+        float: Raw score accumulated over all compatible triads.
+    """
     # Initialize #
     final_score = 0.0
     #scores_per_nucleotide = {}
@@ -1466,6 +1779,16 @@ def get_score_for_subseq(binding_site, x3dna_obj, dna_sequence, potentials,  spl
 
 
 def get_best_sequences(msa_obj, binding_site,  x3dna_obj, potentials,  split_potential, max_score, min_score, methylation=False):
+    """
+    Generate and score a set of high-probability sequences from a PWM.
+
+    Starting from the best sequence implied by the PWM, the function perturbs
+    positions with similar probabilities to collect a manageable set of plausible
+    alternatives and rescales their raw scores into the ``[0, 1]`` interval.
+
+    Returns:
+        list[tuple[str, float]]: Candidate sequences sorted from best to worst.
+    """
 
     nucleotides=["A","C","G","T"]
     #extend for methylation
@@ -1518,6 +1841,15 @@ def get_best_sequences(msa_obj, binding_site,  x3dna_obj, potentials,  split_pot
 
 
 def get_min_max_scores(msa_obj, binding_site,  x3dna_obj, potentials,  split_potential, dummy_dir,methylation=False):
+    """
+    Estimate raw minimum and maximum scores compatible with a motif.
+
+    The function explores high-probability and low-probability PWM-derived
+    sequences to obtain practical score bounds later used for scaling.
+
+    Returns:
+        tuple: ``(min_score, max_score)`` as raw score estimates.
+    """
 
     nucleotides=["A","C","G","T"]
     max_score = min_score = 0.0
@@ -1595,6 +1927,13 @@ def get_min_max_scores(msa_obj, binding_site,  x3dna_obj, potentials,  split_pot
 
     if (max_score - min_score) < 1.0e-6:
        print(("Warning to use Max/Min [ %f vs %f ]"%(max_score,min_score)))
+       if max_score < min_score:
+          swap_score= max_score
+          max_score = min_score
+          min_score = swap_score
+       if (max_score - min_score) < 1.0e-6:
+          max_score = min_score + 1.0
+       print(("Modified Max/Min [ %f vs %f ]"%(max_score,min_score)))
 
     return min_score, max_score
 
@@ -1603,6 +1942,32 @@ def get_min_max_scores(msa_obj, binding_site,  x3dna_obj, potentials,  split_pot
 
 
 def get_single_pwm(input_pdb_file,input_threading_file,threading,output_file,pbm_dir,pdb_dir,families,potential_file, radius, fragment_restrict, binding_restrict, split_potential,auto_mode,family_potentials,pbm_potentials,score_threshold,taylor_approach,pmf,bins_approach,known,meme,reset,refine,dummy_dir,verbose,methylation=False):
+    """
+    End-to-end PWM/MSA/logo generation for one structural input.
+
+    Depending on the available files, this function either reloads precomputed
+    motif representations from disk or derives them from a PDB/threading model,
+    statistical potentials, and protein-DNA triads. It then writes the standard
+    outputs next to ``output_file``.
+
+    Args:
+        input_pdb_file (str): Input PDB file when working from structure.
+        input_threading_file (str): Input threading file when ``threading`` is True.
+        threading (bool): Whether to use the threading workflow instead of a PDB.
+        output_file (str): Output prefix for generated files.
+        pbm_dir (str): PBM-derived data directory.
+        pdb_dir (str): PDB-derived data directory.
+        families (dict): Mapping used to select family-specific potentials.
+        potential_file (str | None): Optional explicit potential file.
+        radius, fragment_restrict, binding_restrict, split_potential, auto_mode,
+        family_potentials, pbm_potentials, score_threshold, taylor_approach, pmf,
+        bins_approach, known, meme, reset, refine, dummy_dir, verbose,
+        methylation: Workflow parameters forwarded to the lower-level helpers.
+
+    Returns:
+        None. Writes some or all of ``.pwm``, ``.meme``, ``.meme.s``, ``.msa``,
+        and logo PNG files.
+    """
     # Initialize output/input files
     pwm_file = output_file+".pwm"
     pwm_meme = output_file+".meme"
@@ -1771,6 +2136,26 @@ def get_sequences_scored(msa_obj,  binding_site,  x3dna_obj, potentials,  split_
     return new_sequences
 
 def refine_msa_obj(refine, msa_obj,triads_obj, x3dna_obj, potentials, radii, fragment_restrict, binding_restrict, split_potential, thresholds, dummy_dir, verbose, methylation=False ):
+    """
+    Refine an existing motif by rescoring/supplementing its sequences.
+
+    The refinement step recomputes sequence scores over the full binding site,
+    optionally adds a fraction of the best PWM-derived candidates, and can
+    rescale scores depending on the selected refinement level.
+
+    Args:
+        refine (int): Refinement level. Values above 1 enable rescaling.
+        msa_obj (nMSA): Motif object to refine.
+        triads_obj, x3dna_obj, potentials, radii, fragment_restrict,
+        binding_restrict, split_potential, thresholds: Context required to
+        rebuild the binding-site scoring model.
+        dummy_dir (str): Temporary directory for helper outputs.
+        verbose (bool): If True, print progress messages.
+        methylation (bool): If True, include methylated nucleotides.
+
+    Returns:
+        nMSA: Refined motif object.
+    """
     # Initialize #
     binding_sites={}
     binding_site={}

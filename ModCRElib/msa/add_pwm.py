@@ -1,3 +1,11 @@
+"""
+Concatenate two PWMs/MSAs into a single motif and write the result.
+
+This script is a lightweight wrapper around :mod:`ModCRElib.msa.pwm_pbm`. It
+loads two input motifs, concatenates them end-to-end with ``MSA.__add__``, and
+writes the resulting motif together with an optional logo.
+"""
+
 import os, sys, re
 import configparser
 import optparse
@@ -32,9 +40,11 @@ from ModCRElib.msa import pwm_pbm as PWM
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse the command line options for concatenating two motifs.
 
+    Returns:
+        optparse.Values: Parsed CLI options describing the two input files,
+        their formats, the output format/prefix, and whether protein mode is used.
     """
 
     parser = optparse.OptionParser("python add_pwm.py -a input_pwm_file -b  input_pwm_file  [-o output_pwm_file --fa format file A --fb format file B --fmt format output --name motif_name]")
@@ -56,14 +66,18 @@ def parse_options():
      
     return options
 
+def main():
+    """
+    Run the command-line workflow for concatenating two motifs.
 
+    Workflow:
+        1. Read motif A and motif B in the requested formats.
+        2. Concatenate them with ``msa_obj_a + msa_obj_b``.
+        3. Write the merged motif and create a logo when possible.
 
-#-------------#
-# Main        #
-#-------------#
-
-if __name__ == "__main__":
-
+    Returns:
+        None. Output files are written next to the requested output prefix.
+    """
     # Arguments & Options #
     options = parse_options()
 
@@ -100,6 +114,14 @@ if __name__ == "__main__":
          PWM.write_protein_logo(msa_obj,logo_file, logo_gapped_file, options.dummy_dir)
        else:
          PWM.write_logo(msa_obj,logo_file, options.dummy_dir)
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 
 
     

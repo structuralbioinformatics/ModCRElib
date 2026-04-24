@@ -36,11 +36,30 @@ from ModCRElib.beans import functions
 
 class TMalign(object):
     """
-    This class defines a {TMalign} object.
+    Parse TM-align output, including scores, transform, and alignments.
 
+    Object features:
+        - Stores raw TM-align stdout lines in `_file_content`.
+        - Stores one or more TM-scores in `_tm_scores`.
+        - Stores rigid-body superposition parameters as:
+            - rotation matrix (`_matrix`)
+            - translation vector (`_vector`)
+        - Stores parsed alignment strings in `_query_alignment` and
+          `_hit_alignment`.
     """
 
     def __init__(self, file_content):
+        """
+                Initialize a TM-align result container from command output lines.
+        
+                Args:
+                    file_content (list): Raw TM-align stdout split by lines.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_content (Any): Value used by this routine."""
         self._file_content = file_content
         self._tm_scores = []
         self._matrix = numpy.identity(3, float)
@@ -51,6 +70,7 @@ class TMalign(object):
         self._parse_file()
 
     def _parse_file(self):
+        """Parse TM-scores, rigid transform, and alignment strings."""
         for line in self._file_content:
             # Capture TM-scores #
             m = re.search("^TM-score=\s*(\S+)", line)
@@ -72,21 +92,30 @@ class TMalign(object):
                     self._hit_alignment = m.group(1)
 
     def get_tm_scores(self):
+        """Return parsed TM-scores."""
         return self._tm_scores
 
     def get_matrix(self):
+        """Return rotation matrix from TM-align superposition."""
         return self._matrix
 
     def get_vector(self):
+        """Return translation vector from TM-align superposition."""
         return self._vector
 
     def get_query_alignment(self):
+        """Return query alignment string."""
         return self._query_alignment
 
     def get_hit_alignment(self):
+        """Return hit alignment string."""
         return self._hit_alignment
 
     def write(self, file_name):
+        """Write raw TM-align output lines to file.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         for line in self._file_content:
             functions.write(file_name, line)
 
@@ -96,12 +125,17 @@ class TMalign(object):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for TM-align structure comparison.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for input structures and outputs.
 
     """
 
-    parser = optparse.OptionParser("python tmalign.py -i input_file [--dummy=dummy_dir -o output_file]")
+    parser = optparse.OptionParser("python tmalign.py -a PDB_FILE_A -b PDB_FILE_B [--dummy DUMMY_DIR -o OUTPUT_FILE]")
 
     parser.add_option("-a", action="store", type="string", dest="pdb_file_a", help="PDB file", metavar="{filename}")
     parser.add_option("-b", action="store", type="string", dest="pdb_file_b", help="PDB file", metavar="{filename}")
@@ -117,18 +151,23 @@ def parse_options():
 
 def get_tmalign_obj(pdb_file_a, pdb_file_b, dummy_dir="/tmp"):
     """
-    This function executes "tmalign" and returns a {TMalign}. Note that
-    PDB B will be superimposed over PDB A.
-
-    @input:
-    pdb_file_a {filename}
-    pdb_file_b {filename}
-    dummy_dir {directory}
-
-    @return:
-    tmalign_obj {TMalign}
-
-    """
+        Run TM-align and parse its output.
+    
+        Note:
+            `pdb_file_b` is superimposed onto `pdb_file_a`.
+    
+        Args:
+            pdb_file_a (str): Reference PDB file.
+            pdb_file_b (str): Mobile PDB file.
+            dummy_dir (str, optional): Reserved temporary directory argument.
+    
+        Returns:
+            TMalign: Parsed TM-align result object.
+    
+    Args:
+        pdb_file_a (Any): Value used by this routine.
+        pdb_file_b (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation."""
 
     try:
         # Initialize #
@@ -146,11 +185,21 @@ def get_tmalign_obj(pdb_file_a, pdb_file_b, dummy_dir="/tmp"):
         raise ValueError("Could not exec TMalign for %s %s" % (pdb_file_a, pdb_file_b))
     return tmalign_obj
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line TM-align workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options.
+        2. Run TM-align on input structures.
+        3. Write TM-align output to file or stdout.
+
+    Args:
+        None.
+
+    Returns:
+        None. TM-align output is written to file or stdout.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -164,3 +213,11 @@ if __name__ == "__main__":
     else:
         for line in tmalign_obj._file_content:
             sys.stdout.write("%s\n" % line)
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()

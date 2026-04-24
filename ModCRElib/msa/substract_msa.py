@@ -1,3 +1,12 @@
+"""
+Subtract one motif from another and write the resulting differential motif.
+
+This script is a small command-line wrapper around :mod:`ModCRElib.msa.pwm_pbm`.
+It loads two motifs in a supported format, computes their difference using the
+``MSA.difference`` method, regenerates a synthetic sequence set, and writes the
+result in MEME, PWM, and MSA formats together with a sequence logo.
+"""
+
 import os, sys, re
 from collections import Counter
 import configparser
@@ -57,9 +66,11 @@ if maxsize < 1000: maxsize=1000
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
-    
+    Parse the command line arguments for motif subtraction.
+
+    Returns:
+        optparse.Values: Parsed options describing the input motifs, output
+        prefix, input format, overlap, mode (DNA/protein), and logo settings.
     """
 
     parser = optparse.OptionParser("python substract_msa.py -i main_pwm -j background_pwm  [-o output_file -m [MAXSIZE] --overlap [OVERLAP] --enhance --dummy dummy_dir --verbose --protein ]  ")
@@ -84,12 +95,20 @@ def parse_options():
     return options
 
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line workflow for subtracting two motifs.
 
-if __name__ == "__main__":
-   # Arguments & Options #
+    Workflow:
+        1. Read the main and background motifs in the selected format.
+        2. Compute a differential motif with ``MSA.difference``.
+        3. Rebuild a synthetic sequence set from the resulting PWM.
+        4. Write the result as ``.meme``, ``.pwm``, ``.msa``, and a logo image.
+
+    Returns:
+        None. Files are written next to the requested output prefix.
+    """
+    # Arguments & Options #
     options = parse_options()
     main        =options.main_pwm
     background  =options.background_pwm
@@ -132,9 +151,15 @@ if __name__ == "__main__":
     if verbose: sys.stdout.write("-- Write LOGOS %s...\n"%(output.rstrip(".msa")+".logo"))
     PWM.write_protein_logo(difference,output.rstrip(".msa")+".logo",dummy_dir)
     if verbose: print("Done")    
-    
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 
     
-
 
 

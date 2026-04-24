@@ -47,12 +47,17 @@ from ModCRElib.web import md2p as MD2P
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for standalone DNA structure generation.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for FASTA input and output settings.
 
     """
 
-    parser = optparse.OptionParser("python build_dna.py  -p pdb_file ( -i interface_file -p pdb_file and (-s dna_sequence or (-t threading_file --pdb pdb_dir ) ) ][--dummy=dummy_dir -o output_dir]")
+    parser = optparse.OptionParser("python build_dna.py -i FASTA_FILE [-o OUTPUT_FILE --conformation DNA_TYPE --dummy DUMMY_DIR]")
 
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
     parser.add_option("-i", action="store", default=None, type="string", dest="fasta_file", help="DNA FastA file", metavar="{filename}")
@@ -71,12 +76,22 @@ def parse_options():
 
 
 
-#---------------#
-# Main          #
-#---------------#
+def main():
+    """
+    Run the command-line DNA-building workflow from FASTA entries.
 
+    Workflow:
+        1. Parse command-line options.
+        2. Iterate over FASTA sequences.
+        3. Build one DNA structure per sequence with selected conformation.
+        4. Write output PDB files.
 
-if __name__ == "__main__":
+    Args:
+        None.
+
+    Returns:
+        None. Generated DNA PDB files are written to disk.
+    """
 
 
     # Arguments & Options #
@@ -109,3 +124,9 @@ if __name__ == "__main__":
 
 
 
+#---------------#
+# Main          #
+#---------------#
+
+if __name__ == "__main__":
+    main()

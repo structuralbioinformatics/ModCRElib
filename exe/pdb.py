@@ -1,3 +1,10 @@
+"""
+Construct PDB-derived intermediate datasets for ModCRE.
+
+The script orchestrates cleaning, structural annotation (DSSP/3DNA), contacts,
+interfaces, triads, folds, non-redundancy, and potential/PWM prerequisites.
+"""
+
 import os, sys, re
 import configparser
 from collections import Counter
@@ -57,9 +64,14 @@ from ModCRElib.msa import pwm_pbm as PWM
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for the PDB build pipeline.
 
+    How to run:
+        ``python pdb.py --pdb pdb_root -t tfs.txt [-o output_dir --start 1 --stop 8]``
+
+    Returns:
+        optparse.Values: Namespace with PDB input locations, step bounds,
+        execution flags, and optional family/radius tuning.
     """
 
     parser = optparse.OptionParser("python pdb.py -p pdb_dir -t tfs_file [--dummy=dummy_dir -o output_dir --start=start_step --stop=stop_step -v]")
@@ -91,7 +103,7 @@ def parse_options():
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse options and create workspace subdirectories.
     options = parse_options()
 
     # Create output "main" subdirs #

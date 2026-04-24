@@ -1,3 +1,11 @@
+"""
+Build PBM-derived assets for ModCRE database construction.
+
+This workflow parses CIS-BP resources, links TFs to motifs/sequences, computes
+homology and threading artifacts, and prepares potentials/PWMs used by later
+profiling and modeling stages.
+"""
+
 import os, sys, re
 from Bio import motifs as mm
 #from Bio.Alphabet import IUPAC
@@ -120,9 +128,14 @@ class TF(object):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for PBM database construction pipeline.
 
+    How to run:
+        ``python pbm.py -e Escores.txt -f tf_families.sql -m motifs.sql --pdb pdb_dir --pwm pwm_dir -s motif_sources.sql -t tfs.sql -u uniprot.fasta``
+
+    Returns:
+        optparse.Values: Namespace containing all PBM/PDB inputs, step controls,
+        and execution toggles.
     """
 
     parser = optparse.OptionParser("python pbm.py -e escores_file -f families_file -m motifs_file --pdb=pdb_dir --pwm=pwm_dir -s sources_file -t tfs_file  -u uniprot_file [-c --dummy dummy_dir -o output_dir --start=start_step --stop=stop_step -v]")
@@ -160,10 +173,10 @@ def parse_options():
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse options and initialize output workspace.
     options = parse_options()
 
-    # Get hostname #
+    # Step 2) Capture hostname for provenance/debug.
     hostname = socket.gethostname()
 
     # Create output "main" subdirs #

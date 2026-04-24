@@ -44,11 +44,33 @@ from ModCRElib.structure.dna import x3dna
 
 class Contacts(object):
     """
-    This class defines a {Contacts} object.
+    Store and serialize pairwise contact objects.
 
+    The serialized representation is compatible with SBILib-driven contact
+    generation used by this module (`get_contacts_obj`). Each data row is
+    semicolon-delimited with this schema:
+    `atomA;atomB(s);distance;residueA;residueB(s);chainA;chainB(s)`.
+
+    Object features:
+        - Stores contacts in `_contacts` as `Contact` objects.
+        - Optionally loads contacts from serialized files (`_parse_file`).
+        - Provides duplicate-aware insertion (`add_contact`) and retrieval
+          (`get_contacts`).
+        - Supports SBILib-compatible text serialization via `write`.
     """
 
     def __init__(self, file_name=None):
+        """
+                Initialize a contacts container.
+        
+                Args:
+                    file_name (str, optional): Path to a serialized contacts file.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         self._file = file_name
         self._contacts = []
         # Initialize #
@@ -56,6 +78,26 @@ class Contacts(object):
             self._parse_file()
 
     def _parse_file(self):
+        """
+        Parse a serialized contacts file generated from SBILib atom/residue data.
+
+        Expected format:
+            - Optional header/comment lines starting with `#`.
+            - One contact per row with seven `;`-separated fields:
+              `atomA;atomB(s);distance;residueA;residueB(s);chainA;chainB(s)`.
+            - `atom*` fields use SBILib-like atom repr strings such as
+              `<AtomOfAminoAcid: [CB, 42, C]:(12.3, 4.5, 6.7)>`.
+            - `residue*` fields use repr strings such as
+              `<ResidueOfAminoAcid: [LYS, 42, ]>`.
+            - Plural fields (`atomB(s)`, `residueB(s)`, `chainB(s)`) are
+              comma-separated to support basepair/dinucleotide contacts.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         for line in functions.parse_file(self._file):
             if line.startswith("#"): continue
             line = line.split(";")
@@ -97,6 +139,17 @@ class Contacts(object):
             self.add_contact(Contact(A, B, distance, A_residue_obj, B_residue_obj, A_chain, B_chain))
 
     def add_contact(self, contact_obj):
+        """
+                Add a contact if not already present.
+        
+                Args:
+                    contact_obj (Contact): Contact object to add.
+        
+                Returns:
+                    None.
+        
+        Args:
+            contact_obj (Any): Contact object/data used by this routine."""
         add = True
 
         for other_contact_obj in self.get_contacts():
@@ -108,9 +161,31 @@ class Contacts(object):
             self._contacts.append(contact_obj)
 
     def get_contacts(self):
+        """Return a copy of stored contacts."""
         return copy.copy(self._contacts)
 
     def write(self, file_name, distance_type=None, filter_contacts=False):
+        """
+                Write contacts in the SBILib-compatible serialized contacts format.
+        
+                Output format:
+                    - Header: `#atomA;atomB(s);distance;residueA;residueB(s);chainA;chainB(s)`.
+                    - One contact row per line, as produced by `Contact.return_as_string()`.
+                    - Multi-target contacts (basepair/dinucleotide modes) encode the
+                      `B`-side atom/residue/chain fields as comma-separated lists.
+        
+                Args:
+                    file_name (str): Output file path.
+                    distance_type (str, optional): Distance mode (`mindist`, etc.).
+                    filter_contacts (bool, optional): Filter non-standard contacts.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine.
+            distance_type (Any): Value used by this routine.
+            filter_contacts (Any): Contact object/data used by this routine."""
         # Initialize #
         if os.path.exists(file_name): os.remove(file_name)
         functions.write(file_name, "#atomA;atomB(s);distance;residueA;residueB(s);chainA;chainB(s)")
@@ -123,11 +198,39 @@ class Contacts(object):
 
 class Contact(object):
     """
-    This class defines a {Contact} object.
+    Represent one atom-level contact and derived interaction categories.
 
+    Object features:
+        - Stores contact geometry:
+            - `_A`, `_B`: contacting atom(s); `_B` can be a single atom or a
+              list (e.g., basepair/dinucleotide geometric representations).
+            - `_distance`: contact distance used for classification/filtering.
+        - Stores residue context:
+            - `_A_residue_obj`, `_B_residue_obj`: residue objects associated to
+              contact atoms (`_B_residue_obj` may be a list in multi-target mode).
+        - Stores chain provenance:
+            - `_A_chain`, `_B_chain`: chain identifiers (`_B_chain` may be a
+              list in multi-target mode).
+        - Provides interaction classifiers for single-atom contacts:
+            - disulfide bridge, hydrogen bond, C-hydrogen bond,
+              salt bridge, van der Waals, geometric clash.
+        - Provides DNA-contact context checks:
+            - `contacts_backbone()` and `contacts_nucleobase()`.
+        - Supports canonical serialization via `return_as_string()` in the
+          contacts file format used by `Contacts`.
     """
 
     def __init__(self, A, B, distance, A_residue_obj=None, B_residue_obj=None, A_chain=None, B_chain=None):
+        """Initialize one contact instance.
+        
+        Args:
+            A (Any): Value used by this routine.
+            B (Any): Value used by this routine.
+            distance (Any): Value used by this routine.
+            A_residue_obj (Any): Value used by this routine.
+            B_residue_obj (Any): Value used by this routine.
+            A_chain (Any): Chain identifier.
+            B_chain (Any): Chain identifier."""
         self._A = A
         self._B = B
         self._distance = distance
@@ -137,20 +240,22 @@ class Contact(object):
         self._B_chain = B_chain
 
     def get_contact(self):
+        """Return a copy of the contact object."""
         return copy.copy(self)
 
     def get_contact_distance(self):
+        """Return the contact distance."""
         return copy.copy(self._distance)
 
     def is_disulfide_bridge(self):
         """
-        This function returns whether two atoms form a disulfide bridge or not.
-        
-        According to definition by Mosca R., Ceol A. & Aloy P., 2013, a disulfide
-        bridge is formed by any atom pair S-S from 2 Cys at 2.56A.
+        Return whether this contact is a disulfide bridge.
 
-        @return: {boolean}
+        Args:
+            None.
 
+        Returns:
+            bool or None: Classification result, or None when undefined.
         """
         if type(self._B) is list: return None
         
@@ -165,13 +270,13 @@ class Contact(object):
 
     def is_hydrogen_bond(self):
         """
-        This function returns whether two atoms form a hydrogen bond or not.
-        
-        According to definition by Mosca R., Ceol A. & Aloy P., 2013, an hydrogen
-        bond is formed by a N-O pair at 3.5A.
+        Return whether this contact is a hydrogen bond.
 
-        @return: {boolean}
+        Args:
+            None.
 
+        Returns:
+            bool or None: Classification result, or None when undefined.
         """
         if type(self._B) is list: return None
 
@@ -185,14 +290,13 @@ class Contact(object):
 
     def is_C_hydrogen_bond(self):
         """
-        This function returns whether two atoms form a C-hydrogen bond or not.
-        
-        According to definition by Mandel-Gutfreund Y., Margalit H., Jernigan J.L.
-        & Zhurkin V.B., 1998, a C-hydrogen bond is formed by a CH-O pair at 3.5A.
-        Specifically between the C5 of Cytosine and the C5M of Thymine and an O.
+        Return whether this contact is a C-hydrogen bond.
 
-        @return: {boolean}
+        Args:
+            None.
 
+        Returns:
+            bool or None: Classification result, or None when undefined.
         """
         # Initialize #
         c_hbonds = {'C': "C5", 'T': "C5M"}
@@ -212,13 +316,13 @@ class Contact(object):
 
     def is_salt_bridge(self):
         """
-        This function returns whether two atoms form a salt bridge or not.
-        
-        According to definition by Mosca R., Ceol A. & Aloy P., 2013, a salt
-        bridge is formed by any atom pair N-O and O-N at 5.5A.
+        Return whether this contact is a salt bridge.
 
-        @return: {boolean}
+        Args:
+            None.
 
+        Returns:
+            bool or None: Classification result, or None when undefined.
         """
         if type(self._B) is list: return None
 
@@ -232,14 +336,13 @@ class Contact(object):
 
     def is_van_der_waals(self):
         """
-        This function returns whether two atoms form a van der waals interaction
-        or not.
-        
-        According to definition by Mosca R., Ceol A. & Aloy P., 2013, a Van der
-        Waals interaction is formed by any atom pair C-C at 5.0A.
-        
-        @return: {boolean}
+        Return whether this contact is a van der Waals interaction.
 
+        Args:
+            None.
+
+        Returns:
+            bool or None: Classification result, or None when undefined.
         """
         if type(self._B) is list: return None
 
@@ -253,11 +356,13 @@ class Contact(object):
 
     def contacts_backbone(self):
         """
-        This function returns wheter protein-DNA contact is through the backbone
-        or not.
+        Return whether a protein-DNA contact is through DNA backbone.
 
-        @return: {boolean}
+        Args:
+            None.
 
+        Returns:
+            bool or None: True for backbone contacts, False otherwise.
         """
         if type(self._B) is list: return None
 
@@ -270,11 +375,13 @@ class Contact(object):
 
     def contacts_nucleobase(self):
         """
-        This function returns wheter protein-DNA contact is through the nucleobase
-        or not.
+        Return whether a protein-DNA contact is through nucleobase atoms.
 
-        @return: {boolean}
+        Args:
+            None.
 
+        Returns:
+            bool or None: True for nucleobase contacts, False otherwise.
         """
         if type(self._B) is list: return None
 
@@ -285,12 +392,13 @@ class Contact(object):
 
     def atoms_clash(self):
         """
-        This function returns wheter two atoms clash or not.
+        Return whether the two contact atoms clash geometrically.
 
-        According to definition by Mosca R., Ceol A. & Aloy P., 2013, any atom
-        pairs at distance less than the sum of the two covalent radii plus 0.5A
-        that are not forming a disulfide bridge are considered clashes.
+        Args:
+            None.
 
+        Returns:
+            bool or None: Clash status or None when undefined.
         """
         if type(self._B) is list: return None
 
@@ -303,6 +411,7 @@ class Contact(object):
             return None
 
     def return_as_string(self):
+        """Serialize the contact object as a delimited text row."""
         try:
             if type(self._B) is list:
                 return "%s;%s;%s;%s;%s;%s;%s" % ('<{0.__class__.__name__}: [{0.name}, {0.number}, {0.element}]:({0.x:.3f}, {0.y:.3f}, {0.z:.3f})>'.format(self._A), ",".join(['<{0.__class__.__name__}: [{0.name}, {0.number}, {0.element}]:({0.x:.3f}, {0.y:.3f}, {0.z:.3f})>'.format(i) for i in self._B]), self._distance, '<{0.__class__.__name__}: [{0.type}, {0.number}, {0.version}]>'.format(self._A_residue_obj), ",".join(['<{0.__class__.__name__}: [{0.type}, {0.number}, {0.version}]>'.format(i) for i in self._B_residue_obj]), self._A_chain, ",".join(self._B_chain))
@@ -317,12 +426,16 @@ class Contact(object):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for contact extraction.
 
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for contact generation.
     """
 
-    parser = optparse.OptionParser("python contacts.py -i input_file [-c contact_type -d distance_type --dummy=dummy_dir -o output_file]")
+    parser = optparse.OptionParser("python contacts.py -i INPUT_FILE [-c CONTACT_TYPE -d DISTANCE_TYPE --dummy DUMMY_DIR -o OUTPUT_FILE]")
 
     parser.add_option("-c", default="pdi", action="store", type="string", dest="contact_type", help="Contact type (i.e. \"pdi\" or \"ppi\"; default = pdi)", metavar="{string}")
     parser.add_option("-d", default="dinucleotides", action="store", type="string", dest="distance_type", help="Distance type (i.e. \"basepairs\", \"dinucleotides\" or \"mindist\"; default = dinucleotides)", metavar="{string}")
@@ -344,20 +457,24 @@ def parse_options():
 
 def get_contacts_obj(pdb_obj, x3dna_obj=None, contacts_type="pdi", distance_type="dinucleotides", dummy_dir="/tmp"):
     """
-    This function extracts all protein-DNA/protein contacts from a PDB file and
-    returns a {Contacts} object.
-
-    @input:
-    pdb_obj {PDB}
-    x3dna_obj {X3DNA}
-    contacts_type {string} either "pdi" or "ppi"
-    distance_type {string} either "basepairs", "dinucleotides" or "mindist"
-    dummy_dir {string}
-
-    @return:
-    contacts_obj {Contacts}
-
-    """
+        Extract protein-DNA or protein-protein contacts from a PDB structure.
+    
+        Args:
+            pdb_obj (PDB): Input PDB structure.
+            x3dna_obj (X3DNA, optional): DNA annotation object.
+            contacts_type (str, optional): Contact mode (`pdi` or `ppi`).
+            distance_type (str, optional): Distance mode.
+            dummy_dir (str, optional): Reserved temporary directory argument.
+    
+        Returns:
+            Contacts: Computed contacts object.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        x3dna_obj (Any): DNA identifier, sequence, or DNA-related data.
+        contacts_type (Any): Contact object/data used by this routine.
+        distance_type (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation."""
 
     # Initialize #
     done = set()
@@ -365,7 +482,6 @@ def get_contacts_obj(pdb_obj, x3dna_obj=None, contacts_type="pdi", distance_type
     max_contact_distance = float(config.get("Parameters", "max_contact_distance"))
     if contacts_type == "ppi" or distance_type == "mindist": distance_threshold = max_contact_distance
     else: distance_threshold = max_contact_distance + max_contact_distance / 2.0
-
     # For each protein chain... #
     for protein_chain_obj in pdb_obj.proteins:
         # For each amino acid... #
@@ -431,7 +547,8 @@ def get_contacts_obj(pdb_obj, x3dna_obj=None, contacts_type="pdi", distance_type
                                             try:
                                               check_nucleotide_p_or_bb=pdb_obj.get_chain_by_id(chain).get_residue_by_identifier(str(residue_num))
                                             except Exception as e:
-                                              print("Error ",e)
+                                              print("Check Warning ",e)
+                                              print("\tdinucleotide: %s basepair: %s chain: %s residue_num: %s"%(dinucleotide,basepair,chain,str(residue_num)))
                                               continue
                                             phosphate_atoms.append(get_nucleotide_p_or_bb(pdb_obj.get_chain_by_id(chain).get_residue_by_identifier(str(residue_num))))
                                             dna_residues.append(pdb_obj.get_chain_by_id(chain).get_residue_by_identifier(str(residue_num)))
@@ -491,15 +608,16 @@ def get_contacts_obj(pdb_obj, x3dna_obj=None, contacts_type="pdi", distance_type
 
 def get_aminoacid_cb_or_ca(aminoacid_obj):
     """
-    This function returns the CB atom or the CA atom of an amino acid;
-    otherwise returns "None".
-
-    @input:
-    aminoacid_obj {ResidueOfAminoAcid}
-    @return:
-    atom_obj {AtomOfAminoAcid}
-
-    """
+        Return the CB atom of an amino acid, or CA for glycines.
+    
+        Args:
+            aminoacid_obj (ResidueOfAminoAcid): Amino-acid residue object.
+    
+        Returns:
+            AtomOfAminoAcid or None: Selected representative atom.
+    
+    Args:
+        aminoacid_obj (Any): Value used by this routine."""
 
     # Initialize #
     aminoacid_atom_obj = None
@@ -513,15 +631,16 @@ def get_aminoacid_cb_or_ca(aminoacid_obj):
 
 def get_nucleotide_p_or_bb(nucleotide_obj):
     """
-    This function returns the phosphate atom or the the 1st backbone atom
-    of a nucleotide; otherwise returns "None".
-
-    @input:
-    nucleotide_obj {ResidueOfNucleotide}
-    @return:
-    atom_obj {AtomOfNucleotide}
-
-    """
+        Return phosphate atom or first backbone atom of a nucleotide.
+    
+        Args:
+            nucleotide_obj (ResidueOfNucleotide): Nucleotide residue object.
+    
+        Returns:
+            AtomOfNucleotide or None: Selected representative atom.
+    
+    Args:
+        nucleotide_obj (Any): Value used by this routine."""
 
     # Initialize #
     dna_atom_obj = None
@@ -538,6 +657,15 @@ def get_nucleotide_p_or_bb(nucleotide_obj):
 #-------------#
 
 if __name__ == "__main__":
+    """
+    Run the command-line contact extraction workflow.
+
+    Args:
+        None.
+
+    Returns:
+        None. Contact outputs are written to file or stdout.
+    """
     
     # Arguments & Options #
     options = parse_options()

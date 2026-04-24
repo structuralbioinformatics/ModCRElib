@@ -1,3 +1,13 @@
+"""
+Build, aggregate, compare, and visualize DNA-binding score profiles.
+
+This module computes profile tracks by combining motif matches from FIMO with
+energy scores derived from protein-DNA structural models, threading-based
+models, or explicit DNA remodeling. It also provides container classes for
+single-protein profiles, multi-protein aggregate profiles, and pairwise
+comparisons between profile collections.
+"""
+
 import os, sys, re
 from collections import Counter
 import configparser
@@ -66,6 +76,16 @@ from ModCRElib.msa import  pwm_pbm as PWM
 #-------------#
 
 def build_BDNA(dna_sequence,pdb_file):
+    """
+    Build an ideal B-DNA model for a sequence and write it to a PDB file.
+
+    Args:
+        dna_sequence (str): DNA sequence used to generate the model.
+        pdb_file (str): Output path for the generated PDB structure.
+
+    Raises:
+        ValueError: If the external X3DNA ``fiber`` executable cannot be run.
+    """
 
     try:
         # Initialize #
@@ -87,6 +107,50 @@ def build_BDNA(dna_sequence,pdb_file):
 ##############################################################################################################################
 
 def calculate_single_profile_of_thread(dna_file,thresholds,energy_profile,thread_file,output_file,pbm_dir,pdb_dir,families,potential_file, radius,fragment_restrict, binding_restrict, split_potential,auto_mode,family_potentials,pbm_potentials,score_threshold,taylor_approach,pmf,bins,known,meme,reset,refine, dummy_dir,verbose,save,methylation=False):
+ """
+ Calculate a profile from a threading file without rebuilding DNA models.
+
+ The workflow scans the input DNA sequence with a PWM derived from the threaded
+ complex, computes FIMO-based occupancy tracks for the requested thresholds,
+ threads each DNA window onto the existing triads, and stores the resulting
+ energy scores in a ``ProfileProtein`` object.
+
+ Args:
+     dna_file (str): FASTA file containing the DNA sequence to profile.
+     thresholds (list): FIMO thresholds used to derive binding tracks.
+     energy_profile (str): Statistical potential used for profile extraction.
+     thread_file (str): Threading file describing the protein-DNA complex.
+     output_file (str): Output prefix for generated auxiliary files.
+     pbm_dir (str): PBM resource directory used for PWM/potential data.
+     pdb_dir (str): PDB resource directory used for structures/annotations.
+     families (dict): Mapping of PDB chain identifiers to TF family labels.
+     potential_file (str | None): Optional explicit potentials file.
+     radius (float): Contact-distance cutoff for interaction scoring.
+     fragment_restrict (dict | None): Optional protein fragment restrictions.
+     binding_restrict (list | None): Optional DNA binding-region restrictions.
+     split_potential (str): Split-potential used for PWM/FIMO preparation.
+     auto_mode (bool): Enable automatic potential selection.
+     family_potentials (bool): Prefer family-specific potentials.
+     pbm_potentials (bool): Enable PBM-derived potential terms.
+     score_threshold (float | None): Threshold used by potential loaders.
+     taylor_approach (bool): Apply Taylor approximation to PMF potentials.
+     pmf (bool): Use raw PMF values without Z-score normalization.
+     bins (bool): Use binned instead of accumulative potential mode.
+     known (bool): Flag indicating known template naming conventions.
+     meme (bool): Build PWM with MEME-compatible nucleotide handling.
+     reset (bool): Reset/refine PWM source MSA before motif generation.
+     refine (int): PWM refinement level.
+     dummy_dir (str): Temporary working directory.
+     verbose (bool): Enable verbose progress logging.
+     save (bool): Whether to write intermediate structures and score files.
+     methylation (bool, optional): Preserve methylated bases in scoring.
+
+ Returns:
+     ProfileProtein: Per-position binding and energy profile for the sequence.
+
+ Raises:
+     Exception: If any stage of PWM generation, scanning, or scoring fails.
+ """
 
  try:
 #Get the output names
@@ -138,7 +202,10 @@ def calculate_single_profile_of_thread(dna_file,thresholds,energy_profile,thread
     
 #Get triads, pdb etc from threading file #
     if verbose: sys.stdout.write("\t-- Get triads ...\n")
-    triads_obj, pdb_obj, x3dna_obj = threading_to_triads.threading_triads(threading_file=input_threading_file, pdb_dir= pdb_dir)
+    triads_obj, pdb_obj, x3dna_obj = threading_to_triads.threading_triads(threading_file=thread_file, pdb_dir= pdb_dir)
+#Get contacts object #
+    if verbose: sys.stdout.write("\t-- Get contacts ...\n")
+    contacts_obj = contacts.get_contacts_obj(pdb_obj, x3dna_obj)
 #Get interface object #
     if verbose: sys.stdout.write("\t-- Get interface ...\n")
     interface_obj = interface.get_interface_obj(pdb_obj, x3dna_obj, contacts_obj)
@@ -192,7 +259,7 @@ def calculate_single_profile_of_thread(dna_file,thresholds,energy_profile,thread
         profile.set_energy_score_by_position(i,scr)
         if save:
            output = output_file+".scr_"+str(i+1)+".txt"
-           protein_name=os.path.basename(pdb_file)
+           protein_name=os.path.basename(thread_file)
            scr.write(output,protein_name=protein_name,normal=True,overwrite=True)
         # Flush
         sys.stdout.flush()
@@ -214,6 +281,49 @@ def calculate_single_profile_of_thread(dna_file,thresholds,energy_profile,thread
 ##############################################################################################################################
 
 def calculate_single_profile_by_thread(dna_file,thresholds,energy_profile,pdb_file,output_file,pbm_dir,pdb_dir,families,potential_file, radius,fragment_restrict, binding_restrict, split_potential,auto_mode,family_potentials,pbm_potentials,score_threshold,taylor_approach,pmf,bins,known,meme,reset, refine, dummy_dir,verbose,save,methylation=False):
+ """
+ Calculate a profile by threading DNA windows onto a native protein-DNA model.
+
+ The function derives a PWM from the input structure, obtains FIMO signal for
+ the full DNA sequence, rethreads each window spanning the interface, and
+ accumulates the resulting energy scores into a ``ProfileProtein`` instance.
+
+ Args:
+     dna_file (str): FASTA file containing the DNA sequence to profile.
+     thresholds (list): FIMO thresholds used to derive binding tracks.
+     energy_profile (str): Statistical potential used for profile extraction.
+     pdb_file (str): PDB file of the reference protein-DNA complex.
+     output_file (str): Output prefix for generated auxiliary files.
+     pbm_dir (str): PBM resource directory used for PWM/potential data.
+     pdb_dir (str): PDB resource directory used for structures/annotations.
+     families (dict): Mapping of PDB chain identifiers to TF family labels.
+     potential_file (str | None): Optional explicit potentials file.
+     radius (float): Contact-distance cutoff for interaction scoring.
+     fragment_restrict (dict | None): Optional protein fragment restrictions.
+     binding_restrict (list | None): Optional DNA binding-region restrictions.
+     split_potential (str): Split-potential used for PWM/FIMO preparation.
+     auto_mode (bool): Enable automatic potential selection.
+     family_potentials (bool): Prefer family-specific potentials.
+     pbm_potentials (bool): Enable PBM-derived potential terms.
+     score_threshold (float | None): Threshold used by potential loaders.
+     taylor_approach (bool): Apply Taylor approximation to PMF potentials.
+     pmf (bool): Use raw PMF values without Z-score normalization.
+     bins (bool): Use binned instead of accumulative potential mode.
+     known (bool): Flag indicating known template naming conventions.
+     meme (bool): Build PWM with MEME-compatible nucleotide handling.
+     reset (bool): Reset/refine PWM source MSA before motif generation.
+     refine (int): PWM refinement level.
+     dummy_dir (str): Temporary working directory.
+     verbose (bool): Enable verbose progress logging.
+     save (bool): Whether to write intermediate structures and score files.
+     methylation (bool, optional): Preserve methylated bases in scoring.
+
+ Returns:
+     ProfileProtein: Per-position binding and energy profile for the sequence.
+
+ Raises:
+     Exception: If the structure cannot be processed or the profile fails.
+ """
 
  try:
 #Get the output names
@@ -348,7 +458,6 @@ def calculate_single_profile_by_thread(dna_file,thresholds,energy_profile,pdb_fi
         sys.stdout.flush()
         if verbose:sys.stdout.write("\t-- CHECK BY PATRICK: one iteration done %s, %s, %s ...\n" %(len(dna_sequence), interface_length + 1, i))
 
-
     if verbose: sys.stdout.write("\t-- CHECK BY PATRICK: PASSED ...\n")
     sys.stdout.flush()
     return profile
@@ -366,6 +475,50 @@ def calculate_single_profile_by_thread(dna_file,thresholds,energy_profile,pdb_fi
 #######################################################################################################################################
 
 def calculate_single_profile_by_models(dna_file,thresholds,energy_profile,pdb_file,output_file,pbm_dir,pdb_dir,families,potential_file, radius,fragment_restrict, binding_restrict, split_potential,auto_mode,family_potentials,pbm_potentials,score_threshold,taylor_approach,pmf,bins,known,meme,reset,refine, dummy_dir,verbose,save,methylation=False):
+ """
+ Calculate a profile by explicitly remodeling each DNA window onto the complex.
+
+ Compared with the threading-only workflow, this routine builds a structural
+ DNA model for every sequence window, recomputes contacts and triads on each
+ remodeled fragment, and then scores the fragment with the selected
+ statistical potentials.
+
+ Args:
+     dna_file (str): FASTA file containing the DNA sequence to profile.
+     thresholds (list): FIMO thresholds used to derive binding tracks.
+     energy_profile (str): Statistical potential used for profile extraction.
+     pdb_file (str): PDB file of the reference protein-DNA complex.
+     output_file (str): Output prefix for generated auxiliary files.
+     pbm_dir (str): PBM resource directory used for PWM/potential data.
+     pdb_dir (str): PDB resource directory used for structures/annotations.
+     families (dict): Mapping of PDB chain identifiers to TF family labels.
+     potential_file (str | None): Optional explicit potentials file.
+     radius (float): Contact-distance cutoff for interaction scoring.
+     fragment_restrict (dict | None): Optional protein fragment restrictions.
+     binding_restrict (list | None): Optional DNA binding-region restrictions.
+     split_potential (str): Split-potential used for PWM/FIMO preparation.
+     auto_mode (bool): Enable automatic potential selection.
+     family_potentials (bool): Prefer family-specific potentials.
+     pbm_potentials (bool): Enable PBM-derived potential terms.
+     score_threshold (float | None): Threshold used by potential loaders.
+     taylor_approach (bool): Apply Taylor approximation to PMF potentials.
+     pmf (bool): Use raw PMF values without Z-score normalization.
+     bins (bool): Use binned instead of accumulative potential mode.
+     known (bool): Flag indicating known template naming conventions.
+     meme (bool): Build PWM with MEME-compatible nucleotide handling.
+     reset (bool): Reset/refine PWM source MSA before motif generation.
+     refine (int): PWM refinement level.
+     dummy_dir (str): Temporary working directory.
+     verbose (bool): Enable verbose progress logging.
+     save (bool): Whether to write intermediate structures and score files.
+     methylation (bool, optional): Preserve methylated bases in scoring.
+
+ Returns:
+     ProfileProtein: Per-position binding and energy profile for the sequence.
+
+ Raises:
+     Exception: If model building or scoring fails for the requested profile.
+ """
 
  try:   
 
@@ -531,7 +684,25 @@ def calculate_single_profile_by_models(dna_file,thresholds,energy_profile,pdb_fi
 
 class Profile(object):
     """
-    This class define a PROFILE object of ProteinProfiles
+    Aggregate multiple ``ProfileProtein`` objects for the same DNA sequence.
+
+    The class provides matrix-style access to FIMO and energy tracks across
+    proteins, plus convenience methods to summarize, export, and visualize the
+    mean and dispersion of those profiles.
+
+    Object features:
+        - Target DNA sequence shared by all aggregated protein profiles
+          (`_dna`).
+        - Configured FIMO thresholds used to retrieve occupancy/score tracks
+          (`_thresholds`).
+        - Collection of compatible per-protein profile objects (`_proteins`),
+          each expected to be a `ProfileProtein` instance with the same DNA.
+        - Supported statistical-potential labels and score-track categories
+          (`_split_potentials`, `_score_types`) used by score selectors.
+        - Aggregation helpers that stack profile matrices and compute summary
+          statistics (mean, max, min, std) for binding and energy tracks.
+        - Export/visualization helpers for tabular outputs and comparative
+          plots (including HTML profile plots).
     """
 
     def __init__(self,dna,thresholds=["0.05", "0.001"], potential=None):
@@ -570,6 +741,7 @@ class Profile(object):
         return self._potential
 
     def add(self,profile_protein):
+        """Add a compatible protein profile to the collection."""
         skip = False
         if profile_protein.get_dna() != self._dna: skip = True
         st=set(self._thresholds)
@@ -588,8 +760,11 @@ class Profile(object):
     
 
     def get_fimo_binding_by_threshold(self,threshold):
-        if threshold not in self._thresholds: return None
-        if len(self.get_profiles())<=0: return None
+        """Return stacked binary binding tracks for one FIMO threshold."""
+        if threshold not in self._thresholds:
+            raise ValueError("Threshold %s is not configured in this profile" % threshold)
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate FIMO binding scores")
         dim=0
         for profile in self.get_profiles():
             if profile.get_fimo_binding_by_threshold(threshold) is None: continue
@@ -599,8 +774,11 @@ class Profile(object):
         return x
 
     def get_fimo_score_by_threshold(self,threshold):
-        if threshold not in self._thresholds: return None
-        if len(self.get_profiles())<=0: return None
+        """Return stacked FIMO score tracks for one threshold."""
+        if threshold not in self._thresholds:
+            raise ValueError("Threshold %s is not configured in this profile" % threshold)
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate FIMO scores")
         dim=0
         for profile in self.get_profiles():
             if profile.get_fimo_score_by_threshold(threshold) is None: continue
@@ -610,8 +788,11 @@ class Profile(object):
         return x
 
     def get_fimo_log_score_by_threshold(self,threshold):
-        if threshold not in self._thresholds: return None
-        if len(self.get_profiles())<=0: return None
+        """Return stacked ``-log(p-value)`` FIMO tracks for one threshold."""
+        if threshold not in self._thresholds:
+            raise ValueError("Threshold %s is not configured in this profile" % threshold)
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate FIMO log scores")
         dim=0
         for profile in self.get_profiles():
             if profile.get_fimo_log_score_by_threshold(threshold) is None: continue
@@ -621,8 +802,10 @@ class Profile(object):
         return x
 
     def get_energy_profile(self,normal=False,potential="s3dc_dd"):
+        """Return stacked mean energy tracks across all proteins."""
         dim=0
-        if len(self.get_profiles())<=0: return None
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate energy profiles")
         for profile in self.get_profiles():
             if dim>0: x=np.vstack((x,profile.get_energy_profile(normal,potential)))
             else:     x=profile.get_energy_profile(normal,potential)
@@ -630,8 +813,10 @@ class Profile(object):
         return x
 
     def get_energy_weighted_profile(self,threshold,normal=False,potential="s3dc_dd"):
+        """Return stacked energy tracks weighted by FIMO binding occupancy."""
         dim=0
-        if len(self.get_profiles())<=0: return None
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate weighted energy profiles")
         for profile in self.get_profiles():
             if dim>0: x=np.vstack((x,profile.get_energy_weighted_profile(threshold,normal,potential)))
             else:     x=profile.get_energy_weighted_profile(threshold,normal,potential)
@@ -639,8 +824,10 @@ class Profile(object):
         return x
 
     def get_energy_best_profile(self,potential="s3dc_dd"): 
+        """Return stacked best-score energy tracks across proteins."""
         dim=0
-        if len(self.get_profiles())<=0: return None
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate best energy profiles")
         for profile in self.get_profiles():
             if dim>0: x=np.vstack((x,profile.get_energy_best_profile(potential)))
             else:     x=profile.get_energy_best_profile(potential)
@@ -648,8 +835,10 @@ class Profile(object):
         return x
 
     def get_energy_best_weighted_profile(self,threshold,potential="s3dc_dd"): 
+        """Return stacked best-score energy tracks weighted by binding."""
         dim=0
-        if len(self.get_profiles())<=0: return None
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate best weighted energy profiles")
         for profile in self.get_profiles():
             if dim>0: x=np.vstack((x,profile.get_energy_best_weighted_profile(threshold,potential)))
             else:     x=profile.get_energy_best_weighted_profile(threshold,potential)
@@ -657,8 +846,10 @@ class Profile(object):
         return x
 
     def get_energy_per_nucleotide_profile(self,normal=False,potential="s3dc_dd"): 
+        """Return stacked per-nucleotide energy contribution tracks."""
         dim=0
-        if len(self.get_profiles())<=0: return None
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate per-nucleotide energy profiles")
         for profile in self.get_profiles():
             if dim>0: x=np.vstack((x,profile.get_energy_per_nucleotide_profile(normal,potential)))
             else:     x=profile.get_energy_per_nucleotide_profile(normal,potential)
@@ -666,8 +857,10 @@ class Profile(object):
         return x
 
     def get_energy_per_nucleotide_weighted_profile(self,threshold,normal=False,potential="s3dc_dd"): 
+        """Return stacked weighted per-nucleotide energy contribution tracks."""
         dim=0
-        if len(self.get_profiles())<=0: return None
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to aggregate weighted per-nucleotide energy profiles")
         for profile in self.get_profiles():
             if dim>0: x=np.vstack((x,profile.get_energy_per_nucleotide_weighted_profile(threshold,normal,potential)))
             else:     x=profile.get_energy_per_nucleotide_weighted_profile(threshold,normal,potential)
@@ -676,17 +869,23 @@ class Profile(object):
 
     def get_profile_score(self,threshold=None,score_type="energy",normal=False,potential="s3dc_dd"):
         """
-          score_type = 
-                          energy, 
-                          energy_best, 
-                          energy_per_nucleotide,
-                          fimo_binding
-                          fimo_score
-                          fimo_log_score
-          if threshold is not None energies are weighted
+        Return the requested score matrix for every stored protein profile.
+
+        Args:
+            threshold (str, optional): FIMO threshold used for weighted scores.
+            score_type (str): One of ``energy``, ``energy_best``,
+                ``energy_per_nucleotide``, ``fimo_binding``, ``fimo_score``,
+                or ``fimo_log_score``.
+            normal (bool): Whether to use normalized energy values.
+            potential (str): Statistical potential to query.
+
+        Returns:
+            numpy.ndarray or None: Matrix with one row per profile and one
+            column per nucleotide position.
         """
         dim=0
-        if len(self.get_profiles())<=0: return None
+        if len(self.get_profiles())<=0:
+            raise ValueError("No protein profiles available to build aggregated profile scores")
         for profile in self.get_profiles():
             if dim>0: x=np.vstack((x,profile.get_profile_score(threshold,score_type,normal,potential)))
             else:     x=profile.get_profile_score(threshold,score_type,normal,potential)
@@ -696,13 +895,14 @@ class Profile(object):
 
 
     def to_mean_table(self):
+        """Build a table with the mean signal of every available profile track."""
         split_potentials=self.get_split_potentials()
         thresholds=self.get_thresholds()
         tbl_dict={}
         tbl_dict.setdefault("Position",[int(x)+1 for x in range(len(self._dna))])
         tbl_dict.setdefault("Nucleotide",list(self._dna))
         for thr in thresholds:
-         if thr is not None: 
+         if thr is not None:
             tbl_dict.setdefault("binding_"+str(thr),self.get_fimo_binding_by_threshold(thr).mean(0))
             tbl_dict.setdefault("fimo_score_"+str(thr),self.get_fimo_score_by_threshold(thr).mean(0))
             tbl_dict.setdefault("fimo_log_score_"+str(thr),self.get_fimo_log_score_by_threshold(thr).mean(0))
@@ -728,6 +928,7 @@ class Profile(object):
         return table
 
     def to_rmsd_table(self):
+        """Build a table with the per-position standard deviation of each track."""
         split_potentials=self._split_potentials
         thresholds=self.get_thresholds()
         tbl_dict={}
@@ -760,14 +961,17 @@ class Profile(object):
         return table
 
     def write_mean_table(self,output):
+        """Write the mean summary table to CSV."""
         table=self.to_mean_table()
         table.to_csv(output)
 
     def write_rmsd_table(self,output):
+        """Write the standard-deviation summary table to CSV."""
         table=self.to_rmsd_table()
         table.to_csv(output)
 
     def plot(self,output):
+        """Save static PNG plots for the mean profile and its spread."""
         table=self.to_mean_table()
         error=self.to_rmsd_table()
         columns=table.columns.values.tolist()
@@ -790,6 +994,7 @@ class Profile(object):
           plt.close()
     
     def plot_all(self,output):
+        """Plot each stored protein profile separately for every available track."""
         x=np.array([int(i)+1 for i in range(len(self._dna))])
         set_columns=set()
         for profile in self.get_profiles():
@@ -814,6 +1019,7 @@ class Profile(object):
          
 
     def plot_html(self,score_types,normal,energies,output,header_title=False):
+        """Create an interactive HTML visualization for aggregated profiles."""
         x=np.array([int(i)+1 for i in range(len(self._dna))])
         name_profile = os.path.basename(output)
         html_file    = output+".html"
@@ -1002,7 +1208,26 @@ class Profile(object):
 
 class ProfileProtein(object):
     """
-    This class define a single protein PROFILE object
+    Store binding and energy profile tracks for a single protein sequence pair.
+
+    The object combines FIMO-derived occupancy information with window-based
+    structural energy scores and exposes helpers to export or visualize those
+    tracks in several derived forms.
+
+    Object features:
+        - DNA sequence and threshold configuration for one protein-specific
+          profile (`_dna`, `_thresholds`).
+        - Per-threshold FIMO-derived arrays for occupancy, raw score, and
+          `-log(p-value)` (`_binding`, `_fimo_score`, `_fimo_log_score`).
+        - Per-window structural scoring objects indexed by start position
+          (`_energy_scores`), typically generated from `scorer.score`.
+        - Split-potential and score-type registries used to select how energy
+          tracks are summarized (`_split_potentials`, `_score_types`,
+          `_potential`).
+        - Accessors that expose direct tracks and derived representations such
+          as best-energy and per-nucleotide energy profiles.
+        - Output utilities to serialize profile tables and produce per-protein
+          plots.
     """
     def __init__(self,dna,thresholds=["0.05", "0.001"],binding=None,fimo_log_score=None,fimo_score=None, energy_scores=None, potential=None):
         self._dna             = dna
@@ -1048,27 +1273,31 @@ class ProfileProtein(object):
         return self._potential
 
     def set_fimo_scores_by_threshold(self, fimo_obj, threshold):
-        binding_score  = np.zeros(len(self._dna))
-        fimo_score     = np.zeros(len(self._dna))
-        fimo_log_score = np.zeros(len(self._dna))
-        ones           = np.zeros(len(self._dna))
-        ones           = ones + 1
-        count          = np.zeros(len(self._dna))
-        for fimo_hit in fimo_obj.get_hits():
-            start = fimo_hit.get_start()
-            end   = fimo_hit.get_end()
-            score = fimo_hit.get_score()
-            logscr= -np.log(fimo_hit.get_p_value())
-            binding_score[start-1:end]   =1
-            fimo_score[start-1:end]     += score
-            fimo_log_score[start-1:end] += logscr
-            count[start-1:end]          += ones[start-1:end]
-        fimo_log_score=fimo_log_score/count
-        fimo_log_score[np.isnan(fimo_log_score)]=0
-        fimo_log_score[np.isinf(fimo_log_score)]=0
-        fimo_score=fimo_log_score/count
-        fimo_score[np.isnan(fimo_score)]=0
-        fimo_score[np.isinf(fimo_score)]=0
+        """Convert FIMO hits into per-position binding and score arrays."""
+        try:
+            binding_score  = np.zeros(len(self._dna))
+            fimo_score     = np.zeros(len(self._dna))
+            fimo_log_score = np.zeros(len(self._dna))
+            ones           = np.zeros(len(self._dna))
+            ones           = ones + 1
+            count          = np.zeros(len(self._dna))
+            for fimo_hit in fimo_obj.get_hits():
+                start = fimo_hit.get_start()
+                end   = fimo_hit.get_end()
+                score = fimo_hit.get_score()
+                logscr= -np.log(fimo_hit.get_p_value())
+                binding_score[start-1:end]   =1
+                fimo_score[start-1:end]     += score
+                fimo_log_score[start-1:end] += logscr
+                count[start-1:end]          += ones[start-1:end]
+            fimo_log_score=fimo_log_score/count
+            fimo_log_score[np.isnan(fimo_log_score)]=0
+            fimo_log_score[np.isinf(fimo_log_score)]=0
+            fimo_score=fimo_score/count
+            fimo_score[np.isnan(fimo_score)]=0
+            fimo_score[np.isinf(fimo_score)]=0
+        except Exception as e:
+            raise ValueError("Failed to derive FIMO scores for threshold %s: %s" % (threshold, e))
         if threshold in self._binding:        self._binding[threshold]=binding_score
         else:                                       self._binding.setdefault(threshold,binding_score)
         if threshold in self._fimo_log_score: self._fimo_log_score[threshold]=fimo_log_score
@@ -1077,36 +1306,54 @@ class ProfileProtein(object):
         else:                                       self._fimo_score.setdefault(threshold,fimo_score)
 
     def get_fimo_binding_by_threshold(self,threshold):
-        if threshold not in self._thresholds: return None
-        if threshold not in self._binding: return None
+        """Return the binary binding track for one FIMO threshold."""
+        if threshold not in self._thresholds:
+            raise ValueError("Threshold %s is not configured for this protein profile" % threshold)
+        if threshold not in self._binding:
+            raise KeyError("No FIMO binding scores stored for threshold %s" % threshold)
         return self._binding.get(threshold)
 
     def get_fimo_score_by_threshold(self,threshold):
-        if threshold not in self._thresholds: return None
-        if threshold not in self._fimo_score: return None
+        """Return the aggregated FIMO score track for one threshold."""
+        if threshold not in self._thresholds:
+            raise ValueError("Threshold %s is not configured for this protein profile" % threshold)
+        if threshold not in self._fimo_score:
+            raise KeyError("No FIMO scores stored for threshold %s" % threshold)
         return self._fimo_score.get(threshold)
 
     def get_fimo_log_score_by_threshold(self,threshold):
-        if threshold not in self._thresholds: return None
-        if threshold not in self._fimo_log_score: return None
+        """Return the aggregated ``-log(p-value)`` track for one threshold."""
+        if threshold not in self._thresholds:
+            raise ValueError("Threshold %s is not configured for this protein profile" % threshold)
+        if threshold not in self._fimo_log_score:
+            raise KeyError("No FIMO log scores stored for threshold %s" % threshold)
         return self._fimo_log_score.get(threshold)
 
     def set_energy_score_by_position(self,position,score):
+        """Store the score object computed for a specific window start."""
         self._energy_scores.setdefault(position,score)
 
     def get_energy_score_by_position(self,position):
-        if position not in list(range(len(self._dna))): return None
-        if position not in self._energy_scores: return None
+        """Return the stored score object for a window start position."""
+        if position not in list(range(len(self._dna))):
+            raise IndexError("Energy score position %s is outside the DNA sequence" % position)
+        if position not in self._energy_scores:
+            print(self._energy_scores, position, self._dna)
+            raise KeyError("No energy score stored at position %s" % position)
         return self._energy_scores.get(position)
 
     def get_energy_profile(self,normal=False,potential="s3dc_dd"):
+        """Average whole-window energy scores over covered nucleotides."""
         energy = np.zeros(len(self._dna))
         ones   = np.zeros(len(self._dna))
         ones   = ones + 1
         count  = np.zeros(len(self._dna))
         scr=self.get_energy_score_by_position(0)
+        if scr is None:
+            raise ValueError("Cannot build energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
+        #EDIT PATRICK Due to indexing error changing all cases (range(len(self._dna)-binding_length+1) to range(len(self._dna)-binding_length))
+        for i in range(len(self._dna)-binding_length):
             scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
@@ -1122,15 +1369,17 @@ class ProfileProtein(object):
         return energy
 
     def get_energy_weighted_profile(self,threshold,normal=False,potential="s3dc_dd"):
-        if self.get_fimo_binding_by_threshold(threshold) is None: return None
+        """Average energy scores after masking windows by FIMO occupancy."""
         binding_score=self.get_fimo_binding_by_threshold(threshold)
         energy=np.zeros(len(self._dna))
         ones   = np.zeros(len(self._dna))
         ones   = ones + 1
         count  = np.zeros(len(self._dna))
         scr=self.get_energy_score_by_position(0)
+        if scr is None:
+            raise ValueError("Cannot build weighted energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
+        for i in range(len(self._dna)-binding_length):
             scr=self.get_energy_score_by_position(i)
             if scr is None:  continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
@@ -1148,11 +1397,14 @@ class ProfileProtein(object):
         return energy
 
     def get_energy_best_profile(self,potential="s3dc_dd"):
+        """Keep the best normalized energy observed at each nucleotide."""
         normal=True
         energy=np.zeros(len(self._dna))
         scr=self.get_energy_score_by_position(0)
+        if scr is None:
+            raise ValueError("Cannot build best energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
+        for i in range(len(self._dna)-binding_length):
             scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
@@ -1170,13 +1422,15 @@ class ProfileProtein(object):
 
 
     def get_energy_best_weighted_profile(self,threshold,potential="s3dc_dd"):
-        if self.get_fimo_binding_by_threshold(threshold) is None: return None
+        """Keep the best normalized energy per nucleotide, weighted by binding."""
         binding_score=self.get_fimo_binding_by_threshold(threshold)
         normal=True
         energy=np.zeros(len(self._dna))
         scr=self.get_energy_score_by_position(0)
+        if scr is None:
+            raise ValueError("Cannot build best weighted energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
+        for i in range(len(self._dna)-binding_length):
             scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
@@ -1194,11 +1448,14 @@ class ProfileProtein(object):
 
 
     def get_energy_per_nucleotide_profile(self,normal=False,potential="s3dc_dd"):
+        """Average per-nucleotide energy contributions across all windows."""
         energy=np.zeros(len(self._dna))
         count  = np.zeros(len(self._dna))
         scr=self.get_energy_score_by_position(0)
+        if scr is None:
+            raise ValueError("Cannot build per-nucleotide energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
+        for i in range(len(self._dna)-binding_length):
             scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
@@ -1215,13 +1472,15 @@ class ProfileProtein(object):
 
 
     def get_energy_per_nucleotide_weighted_profile(self,threshold,normal=False,potential="s3dc_dd"):
-        if self.get_fimo_binding_by_threshold(threshold) is None: return None
+        """Average per-nucleotide energies after weighting by binding signal."""
         binding_score=self.get_fimo_binding_by_threshold(threshold)
         energy=np.zeros(len(self._dna))
         count  = np.zeros(len(self._dna))
         scr=self.get_energy_score_by_position(0)
+        if scr is None:
+            raise ValueError("Cannot build weighted per-nucleotide energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
+        for i in range(len(self._dna)-binding_length):
             scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
@@ -1238,14 +1497,18 @@ class ProfileProtein(object):
 
     def get_profile_score(self,threshold=None,score_type="energy",normal=False,potential="s3dc_dd"):
         """
-          score_type = 
-                          energy, 
-                          energy_best, 
-                          energy_per_nucleotide,
-                          fimo_binding
-                          fimo_score
-                          fimo_log_score
-          if threshold is not None energies are weighted
+        Return one profile track in the requested representation.
+
+        Args:
+            threshold (str, optional): FIMO threshold used for weighted scores.
+            score_type (str): One of ``energy``, ``energy_best``,
+                ``energy_per_nucleotide``, ``fimo_binding``, ``fimo_score``,
+                or ``fimo_log_score``.
+            normal (bool): Whether to use normalized energy values.
+            potential (str): Statistical potential to query.
+
+        Returns:
+            numpy.ndarray or None: Vector with one value per nucleotide.
         """
         weighted=False
         if threshold is not None: weighted=True
@@ -1276,6 +1539,7 @@ class ProfileProtein(object):
                   return self.get_energy_profile(normal,potential)
 
     def to_table(self):
+        """Convert all available tracks into a tabular representation."""
         split_potentials=self._split_potentials
         thresholds=self.get_thresholds()
         tbl_dict={}
@@ -1306,10 +1570,12 @@ class ProfileProtein(object):
         return table
 
     def write_table(self,output):
+        """Write the profile table to CSV."""
         table=self.to_table()
         table.to_csv(output)
 
     def plot(self,output):
+        """Save static PNG plots for every available profile track."""
         table=self.to_table()
         columns=table.columns.values.tolist()
         #x = table["Nucleotide"].values
@@ -1328,6 +1594,7 @@ class ProfileProtein(object):
           plt.close()
 
     def plot_html(self,score_types,normal,energies,output,header_title=False):
+        """Create an interactive HTML visualization for one protein profile."""
         x=np.array([int(i)+1 for i in range(len(self._dna))])
         name_profile = os.path.basename(output)
         html_file    = output+".html"
@@ -1494,6 +1761,26 @@ class ProfileProtein(object):
         
 
 class twoprofile(object):
+    """
+    Compare two profile collections with descriptive and statistical summaries.
+
+    The class aligns two ``Profile`` objects position by position, derives
+    paired or summary differences between them, computes non-parametric test
+    scores, and exports or visualizes the resulting comparison tracks.
+
+    Object features:
+        - Two aligned profile collections to compare (`_profile_one`,
+          `_profile_two`), each expected to be a `Profile` instance.
+        - Shared threshold/potential configuration controlling which tracks are
+          compared (`_thresholds`, `_potential`, `_split_potentials`,
+          `_score_types`).
+        - Pairwise-difference utilities for direct profile subtraction and
+          standard-difference envelopes across proteins.
+        - Position-wise statistical testing utilities (Wilcoxon and
+          Mann-Whitney) to quantify significance of profile differences.
+        - Export and plotting helpers for comparison matrices, summary tables,
+          and HTML/figure outputs.
+    """
 
     def __init__(self,a,b,thresholds=["0.05", "0.001"], potential=None):
           self._profile_one     = a
@@ -1541,21 +1828,33 @@ class twoprofile(object):
         return self._score_types
 
     def get_paired_difference(self,threshold=None,score_type="energy",normal=False,potential="s3dc_dd"):
+          """Return the direct profile-two minus profile-one difference matrix."""
           profile_one=self.get_profile_one().get_profile_score(threshold,score_type,normal,potential)
           profile_two=self.get_profile_two().get_profile_score(threshold,score_type,normal,potential)
           dna_length_one = len(self.get_profile_one().get_dna())
           dna_length_two = len(self.get_profile_two().get_dna())
-          if dna_length_one != dna_length_two: return None
+          if dna_length_one != dna_length_two:
+              raise ValueError("Cannot compare profiles with different DNA lengths: %s vs %s" % (dna_length_one, dna_length_two))
+          if profile_one is None or profile_two is None:
+              raise ValueError("Cannot compare paired differences for score_type %s and threshold %s" % (score_type, threshold))
           if len(profile_two) == len(profile_one): return (profile_two - profile_one)
-          #else: return (profile_two.mean(0) - profile_one.mean(0)
-          else: return (profile_two[:min(len(profile_two),len(profile_one)),:] - profile_one[:min(len(profile_two),len(profile_one)),:])
+          try:
+              if np.ndim(profile_one) == 1 or np.ndim(profile_two) == 1:
+                  limit = min(len(profile_two), len(profile_one))
+                  return profile_two[:limit] - profile_one[:limit]
+              limit = min(len(profile_two),len(profile_one))
+              return profile_two[:limit,:] - profile_one[:limit,:]
+          except Exception as e:
+              raise ValueError("Failed paired difference for score_type %s and threshold %s: %s" % (score_type, threshold, e))
 
     def get_standard_difference(self,threshold=None,score_type="energy",normal=False,potential="s3dc_dd"):
+          """Return mean difference bounds derived from the two profile sets."""
           profile_one=self.get_profile_one().get_profile_score(threshold,score_type,normal,potential)
           profile_two=self.get_profile_two().get_profile_score(threshold,score_type,normal,potential)
           dna_length_one = len(self.get_profile_one().get_dna())
           dna_length_two = len(self.get_profile_two().get_dna())
-          if dna_length_one != dna_length_two: return None
+          if dna_length_one != dna_length_two:
+              raise ValueError("Cannot compare profiles with different DNA lengths: %s vs %s" % (dna_length_one, dna_length_two))
           difference_mean = profile_two.mean(0) - profile_one.mean(0)
           difference_rmsd = (profile_two.std(0) + profile_one.std(0))/2
           difference_lower= difference_mean - difference_rmsd
@@ -1565,6 +1864,7 @@ class twoprofile(object):
           return x
            
     def get_wilcoxon_score(self,threshold=None,score_type="energy",normal=False,potential="s3dc_dd"):
+          """Compute per-position Wilcoxon signed-rank significance scores."""
           profile_one=self.get_profile_one().get_profile_score(threshold,score_type,normal,potential)
           profile_two=self.get_profile_two().get_profile_score(threshold,score_type,normal,potential)
           dna_length =min(len(self.get_profile_one().get_dna()),len(self.get_profile_two().get_dna()))
@@ -1587,6 +1887,7 @@ class twoprofile(object):
           return wscore
 
     def get_mannwhitney_score(self,threshold=None,score_type="energy",normal=False,potential="s3dc_dd"):
+          """Compute per-position Mann-Whitney significance scores."""
           profile_one=self.get_profile_one().get_profile_score(threshold,score_type,normal,potential)
           profile_two=self.get_profile_two().get_profile_score(threshold,score_type,normal,potential)
           dna_length =min(len(self.get_profile_one().get_dna()),len(self.get_profile_two().get_dna()))
@@ -1613,6 +1914,7 @@ class twoprofile(object):
           return wscore
 
     def to_stats_table(self):
+        """Build a table with per-position statistical test scores."""
         split_potentials=self._split_potentials
         thresholds=self.get_thresholds()[:]
         thresholds.append(None)
@@ -1621,7 +1923,8 @@ class twoprofile(object):
         tbl_dict={}
         dna_length_one = len(self.get_profile_one().get_dna())
         dna_length_two = len(self.get_profile_two().get_dna())
-        if dna_length_one != dna_length_two: return None
+        if dna_length_one != dna_length_two:
+            raise ValueError("Cannot create statistics table for profiles with different DNA lengths: %s vs %s" % (dna_length_one, dna_length_two))
         dna_length = dna_length_one
         tbl_dict.setdefault("Position",[int(x)+1 for x in range(dna_length)])
         for sc in  score_types:
@@ -1639,13 +1942,15 @@ class twoprofile(object):
                   else:           namep = potential + "_" + sc +"_weighted_"+str(thr)
                   for normal in normalization:
                      if "best" in sc and normal:continue
+                     name = namep
                      if normal: name = "normal_"+namep 
                      tbl_dict.setdefault(name+"_wilcoxon_score",self.get_wilcoxon_score(thr,sc,normal,potential))
-                     tbl_dict.setdefault(name+"_mannwhitney_score",self.get_wilcoxon_score(thr,sc,normal,potential))
+                     tbl_dict.setdefault(name+"_mannwhitney_score",self.get_mannwhitney_score(thr,sc,normal,potential))
         table=pd.DataFrame(tbl_dict)
         return table
 
     def to_mean_table(self):
+        """Build a table with mean paired and standard profile differences."""
         split_potentials=self._split_potentials
         thresholds=self.get_thresholds()[:]
         thresholds.append(None)
@@ -1654,7 +1959,8 @@ class twoprofile(object):
         tbl_dict={}
         dna_length_one = len(self.get_profile_one().get_dna())
         dna_length_two = len(self.get_profile_two().get_dna())
-        if dna_length_one != dna_length_two: return None
+        if dna_length_one != dna_length_two:
+            raise ValueError("Cannot create mean table for profiles with different DNA lengths: %s vs %s" % (dna_length_one, dna_length_two))
         dna_length = dna_length_one
         tbl_dict.setdefault("Position",[int(x)+1 for x in range(dna_length)])
         for sc in  score_types:
@@ -1672,6 +1978,7 @@ class twoprofile(object):
                   else:           namep = potential + "_" + sc +"_weighted_"+str(thr)
                   for normal in normalization:
                      if "best" in sc and normal:continue
+                     name = namep
                      if normal: name = "normal_"+namep 
                      tbl_dict.setdefault(name+"_paired",self.get_paired_difference(thr,sc,normal,potential).mean(0))
                      tbl_dict.setdefault(name+"_standard",self.get_standard_difference(thr,sc,normal,potential).mean(0))
@@ -1679,6 +1986,7 @@ class twoprofile(object):
         return table
 
     def to_rmsd_table(self):
+        """Build a table with the spread of comparison-derived differences."""
         split_potentials=self._split_potentials
         thresholds=self.get_thresholds()[:]
         thresholds.append(None)
@@ -1687,7 +1995,8 @@ class twoprofile(object):
         tbl_dict={}
         dna_length_one = len(self.get_profile_one().get_dna())
         dna_length_two = len(self.get_profile_two().get_dna())
-        if dna_length_one != dna_length_two: return None
+        if dna_length_one != dna_length_two:
+            raise ValueError("Cannot create RMSD table for profiles with different DNA lengths: %s vs %s" % (dna_length_one, dna_length_two))
         dna_length = dna_length_one
         tbl_dict.setdefault("Position",[int(x)+1 for x in range(dna_length)])
         for sc in  score_types:
@@ -1705,6 +2014,7 @@ class twoprofile(object):
                   else:           namep = potential + "_" + sc +"_weighted_"+str(thr)
                   for normal in normalization:
                      if "best" in sc and normal:continue
+                     name = namep
                      if normal: name = "normal_"+namep 
                      tbl_dict.setdefault(name+"_paired",self.get_paired_difference(thr,sc,normal,potential).std(0))
                      tbl_dict.setdefault(name+"_standard",self.get_standard_difference(thr,sc,normal,potential).std(0))
@@ -1713,19 +2023,23 @@ class twoprofile(object):
  
 
     def write_stats_table(self,output):
+        """Write the statistical comparison table to CSV."""
         table=self.to_stats_table()
         if table is not None: table.to_csv(output)
  
     def write_mean_table(self,output):
+        """Write the comparison mean table to CSV."""
         table=self.to_mean_table()
         if table is not None: table.to_csv(output)
 
     def write_rmsd_table(self,output):
+        """Write the comparison spread table to CSV."""
         table=self.to_rmsd_table()
         if table is not None: table.to_csv(output)
 
 
     def stplot(self,output):
+        """Save PNG plots for the statistical comparison tracks."""
         table=self.to_stats_table()
         if table is not None:
          columns=table.columns.values.tolist()
@@ -1745,6 +2059,7 @@ class twoprofile(object):
    
 
     def plot(self,output):
+        """Save PNG plots for the mean comparison tracks and their spread."""
         table=self.to_mean_table()
         error=self.to_rmsd_table()
         if table is not None and error is not None:
@@ -1767,6 +2082,7 @@ class twoprofile(object):
 
  
     def twoplot(self,output):
+        """Plot the two compared profile collections on the same axes."""
         profile_one=self.get_profile_one()
         profile_two=self.get_profile_two()
         table_one=profile_one.to_mean_table()
@@ -1798,6 +2114,7 @@ class twoprofile(object):
           plt.close()
 
     def plot_html(self,score_types,normal,energies,output,header_title=False):
+        """Create an interactive HTML visualization for the profile comparison."""
         name_profile = os.path.basename(output)
         html_file    = output+".html"
         thresholds=[]
@@ -1895,8 +2212,8 @@ class twoprofile(object):
                    visible=False
                    if thr is None: thre="1.0"
                    else: thre=thr
-                   legend_one="P1 P-val<"+str(thre)
-                   legend_two="P2 P-val<"+str(thre)
+                   legend_one="P1 P-val<"+thre
+                   legend_two="P2 P-val<"+thre
                    #trace_one =       go.Scatter(x = x, y = y, text=text_one, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 3),  fill='tonexty', hoverinfo="x+y+text", visible = visible)
                    #upper_bound_one = go.Scatter(x = x, y = y+e, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 0.8), fill='tonexty', showlegend = False, hoverinfo='none', visible = visible)
                    #lower_bound_one = go.Scatter(x = x, y = y-e, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 0.8),  showlegend = False, hoverinfo='none', visible = visible)
@@ -1990,4 +2307,3 @@ class twoprofile(object):
         pltly(fig, filename=html_file, show_link=False, auto_open=False)
 
             
-

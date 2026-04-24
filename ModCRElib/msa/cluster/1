@@ -1,0 +1,188 @@
+import numpy as np
+
+def padding(arr,final_length=50,mode="right"):
+    """
+    Pads or cuts a 2D numpy array (B, L) along the last dimension.
+
+    Args:
+        arr (np.ndarray): Input array of shape (B, L).
+        final_length (int): Desired length after padding/cutting.
+        mode (str): Padding mode: 'left', 'right', or 'center'.
+
+    Returns:
+        np.ndarray: Array of shape (B, final_length).
+    """
+    if arr.ndim != 2:
+        raise ValueError("Input must be a 2D array of shape (B, L)")
+
+    batch, length = arr.shape
+
+    # Case 1: Cut if too long
+    if length > final_length:
+        if mode == "right":  # keep left part
+            return arr[:, :final_length]
+        elif mode == "left":  # keep right part
+            return arr[:, -final_length:]
+        elif mode == "center":  # cut equally from both sides
+            start = (length - final_length) // 2
+            end = start + final_length
+            return arr[:, start:end]
+        else:
+            raise ValueError("mode must be 'left', 'right', or 'center'")
+
+    # Case 2: Pad if too short
+    pad_size = final_length - length
+    if mode == "right":
+        pad_left, pad_right = 0, pad_size
+    elif mode == "left":
+        pad_left, pad_right = pad_size, 0
+    elif mode == "center":
+        pad_left = pad_size // 2
+        pad_right = pad_size - pad_left
+    else:
+        raise ValueError("mode must be 'left', 'right', or 'center'")
+
+    return np.pad(arr, ((0, 0), (pad_left, pad_right)), mode="constant", constant_values=0)
+
+
+
+def is_padding(column, threshold=0.0001):
+    """
+    Determine if a column corresponds to padding (all zeros or near-zero).
+    """
+    return column.sum() < threshold
+
+
+def pearson_correlation(a, b,gap_penalty,threshold=0.0001):
+    """
+    Calculate Pearson correlation between two 1D-tensors.
+    """
+    if is_padding(a, threshold) or is_padding(b, threshold):
+       return  -gap_penalty
+    else:
+       a_mean = a.mean()
+       b_mean = b.mean()
+       numerator =((a - a_mean) * (b - b_mean)).sum()
+       denominator =np.sqrt(((a - a_mean) ** 2).sum()) * np.sqrt(((b - b_mean) ** 2).sum()) + 1e-8
+       return numerator / denominator
+
+def product(a,b,gap_penalty,threshold=0.0001):
+    """
+    Calculate dot product
+    """
+
+    if is_padding(a, threshold) or is_padding(b, threshold):
+       return  -gap_penalty
+    else:
+       return (a * b).sum()
+
+def kullback_leibler(a,b,gap_penalty,threshold=0.0001):
+    """
+    Calculate Kullback Leibler divergence
+    """
+
+    if is_padding(a, threshold) or is_padding(b, threshold):
+       return  -gap_penalty
+    else:
+       return +(a * (np.log(a) - np.log(b))).sum()
+    
+
+
+def align_without_gaps(profile1, profile2, gap_penalty=0.5, threshold=0.0001):
+    """
+    Align two profiles without gaps by attempting all possible offsets.
+
+    Args:
+        profile1 (torch.Tensor): first profile of shape (4, L1).
+        profile2 (torch.Tensor): Second profile of shape (4, L2).
+        gap_penalty (float): Gap penalty for padding.
+        threshold (float): minimum sum to be considered non-padding.
+
+    Returns:
+        max_score (float): The maximum alignment score.
+        max_offset (int): The offset yielding maximum score.
+        alignment (list of tuples): List of pairs (i, j) with matching positions.
+    """
+    L1 = profile1.shape[1]
+    L2 = profile2.shape[1]
+
+    max_score = float('-inf')
+    max_offset = 0
+    max_alignment = []
+
+    # Try all possible offsets
+    for offset in range(-L2+1, L1):
+        score = 0
+        alignment = []
+
+        for i in range(L1):
+            j = i - offset
+            if j < 0 or j >= L2:
+                continue
+
+            col1 = profile1[:, i]
+            col2 = profile2[:, j]
+
+            #corr = pearson_correlation(col1, col2,gap_penalty,threshold)
+            corr = kullback_leibler(col1, col2,gap_penalty,threshold)
+            #corr = product(col1, col2,gap_penalty,threshold)
+            score += corr
+            alignment.append((i, j))
+
+        if score > max_score:
+            max_score = score
+            max_offset = offset
+            max_alignment = alignment.copy()
+
+    return max_score, max_offset, max_alignment
+
+
+
+# Example usage:
+
+# Create two profiles with padding
+profile1 = np.random.rand(4, 20)
+profile2 = np.random.rand(4, 10)
+profile3 = np.random.rand(4, 8)
+
+print("PROFILE1 ",profile1)
+print("PROFILE2 ",profile2)
+print("PROFILE3 ",profile3)
+# Simulating padding by zeroing first and last columns
+
+profile1=padding(profile1,final_length=50,mode="center")
+#profile2=padding(profile1,final_length=50,mode="center")
+#profile3=padding(profile1,final_length=50,mode="center")
+
+#profile1[:, :5] = 0
+#profile1[:, -5:] = 0
+
+#profile2[:, :2] = 0
+#profile2[:, -2:] = 0
+
+#profile3[:, :8] = 0
+#profile3[:, -8:] = 0
+
+print("PROFILE1-padding ",profile1)
+print("PROFILE2-padding ",profile2)
+print("PROFILE3-padding ",profile3)
+
+# Align
+max_score, max_offset, max_alignment = align_without_gaps(profile1, profile2, gap_penalty=0.05)
+
+print("Best alignment score =", max_score)
+print("Best offset =", max_offset)
+print("Alignment:")
+print("Profile 1 -> Profile 2")
+for i, j in max_alignment:
+    print(f'{i} -> {j} score {product(profile1[:, i],profile2[:, j],gap_penalty=0.05)}')
+
+max_score, max_offset, max_alignment = align_without_gaps(profile1, profile3, gap_penalty=0.05)
+
+print("Best alignment score =", max_score)
+print("Best offset =", max_offset)
+print("Alignment:")
+print("Profile 1 -> Profile 3")
+for i, j in max_alignment:
+    print(f'{i} -> {j} score {product(profile1[:, i],profile3[:, j],gap_penalty=0.05)}')
+

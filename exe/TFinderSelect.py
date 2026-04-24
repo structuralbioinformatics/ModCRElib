@@ -1,5 +1,12 @@
 #!/usr/bin/python
 
+"""
+Heuristic TF selector based on PDB, UniProt, and GO-term evidence.
+
+This builder script classifies candidate PDB chains as TF/non-TF, extending an
+existing TF list with newly inferred TF entries and a retry list for failures.
+"""
+
 #===================================================
 #DESCRIPTION
 #
@@ -285,11 +292,15 @@ def hasIntersection( listA, listB):
 def isTFFromPDBKeywords( pdb ):
 
     files_path = config.get("Paths", "files_path")
-    negative_keywords = os.path.join(files_path, config.get("Paths", "negKW"))
-    positive_keywords = os.path.join(files_path, config.get("Paths", "posKW"))
-    negative_keywds = readFile( negative_keywords )
-    positive_keywds = readFile( positive_keywords )
-
+    try:
+     negative_keywords = os.path.join(files_path, config.get("Paths", "negKW"))
+     positive_keywords = os.path.join(files_path, config.get("Paths", "posKW"))
+     negative_keywds = readFile( negative_keywords )
+     positive_keywds = readFile( positive_keywords )
+    except Exception as e:
+     print("Failed isTFFromPDBKeywords, not found files")
+     print(e)
+     raise(e)
     negative_keywds_dic = {}
     positive_keywds_dic = {}
 
@@ -335,11 +346,16 @@ def isTFFromPDBKeywords( pdb ):
 
 def isTFFromUNPKeywords( uniprotLines ):
     #CHECK UNIPROT
-    files_path = config.get("Paths", "files_path")
-    negative_keywords = os.path.join(files_path, config.get("Paths", "negKW"))
-    positive_keywords = os.path.join(files_path, config.get("Paths", "posKW"))
-    negative_keywds = readFile( negative_keywords )
-    positive_keywds = readFile( positive_keywords )
+    try:
+     files_path = config.get("Paths", "files_path")
+     negative_keywords = os.path.join(files_path, config.get("Paths", "negKW"))
+     positive_keywords = os.path.join(files_path, config.get("Paths", "posKW"))
+     negative_keywds = readFile( negative_keywords )
+     positive_keywds = readFile( positive_keywords )
+    except Exception as e:
+     print("Failed isTFFromUNPKeywords, not found files")
+     print(e)
+     raise(e)
 
     negative_keywds_dic = {}
     positive_keywds_dic = {}
@@ -425,6 +441,7 @@ def keywordDecision( positive_keywds_dic, negative_keywds_dic, tFound ):
 
 def isTF( pdbid, chain, pdbLines ):
 
+  try:
     #PDB obsolete information
     #goTermsFile = getGOTermsFromRest( pdbid, chain )
     #Rest is only GO terms, not the entire UniProt entry
@@ -439,15 +456,21 @@ def isTF( pdbid, chain, pdbLines ):
     onlyGOTerms = getOnlyGOTerms( goTermsFile )
 
     print("GO TERMS",onlyGOTerms)
+    try:
+     molNeg = getStrongNegativeGOTerms( )
+     molSPos = getStrongPositiveGOTerms( )
+     molWPos = getWeakPositiveGOTerms( )
+     posBioProc = getPositiveBiologicalProcessGOTerms( )
+     negBioProc = getNegativeBiologicalProcessGOTerms( )
+    except Exception as e:
+     print("Failed isTF, not found files")
+     print(e)
+     raise(e)
 
-    molNeg = getStrongNegativeGOTerms( )
-    molSPos = getStrongPositiveGOTerms( )
-    molWPos = getWeakPositiveGOTerms( )
-    posBioProc = getPositiveBiologicalProcessGOTerms( )
-    negBioProc = getNegativeBiologicalProcessGOTerms( )
-
+    print("POSITIVE TERMS",molSPos,molWPos,posBioProc)
+    print("NEGATIVE TERMS",molNeg,negBioProc)
     isTF = False
-    if( not hasIntersection( molNeg, onlyGOTerms ) ):
+    if ( not hasIntersection( molNeg, onlyGOTerms ) ):
         if( hasIntersection( molSPos, onlyGOTerms ) ):
             print("FOUND POSITIVE FUNCTIONS",set(molSPos).intersection(set(onlyGOTerms)))
             isTF = True
@@ -469,7 +492,7 @@ def isTF( pdbid, chain, pdbLines ):
                       #True -> check UniProt keywords
                       if isTF1 or isTF2: isTF = True 
             elif( onlyGOTerms != [] ):
-                print("NON OF THE GO TERMS IS ACCEPTED")
+                print("NONE OF THE GO TERMS IS ACCEPTED")
                 isTF = False
             else:#No UniProt information available
                 isTF = isTFFromPDBKeywords( pdbLines )
@@ -477,12 +500,17 @@ def isTF( pdbid, chain, pdbLines ):
     else:
         print("FOUND NEGATIVE FUNCTIONS",set(molNeg).intersection(set(onlyGOTerms)))
 
+    print("isTF ?",isTF)
+
     if( isTF == None ):
         return ( "Non-TF ( manually verify )" )
     elif( isTF ):
         return ( "TF" )
     else:
         return ( "Non-TF" )
+  except Exception as e:
+     print("Failed isTF ",e)
+     raise(e)
 
 
 #=========================================================
@@ -492,6 +520,15 @@ def isTF( pdbid, chain, pdbLines ):
 #=========================================================
 
 def parse_options():
+ """
+ Parse CLI options for standalone TF selection runs.
+
+ How to run:
+  ``python TFinderSelect.py -i pdb_list.csv -t known_tfs.txt -o tf_out.txt``
+
+ Returns:
+  optparse.Values: Namespace with input/output/retry file paths.
+ """
  parser = OptionParser( )
  parser.add_option( "-i", "--file", dest="fileName", default=None, help="Supply a file listing PDB IDs w/ or w/o chain IDs" )
  parser.add_option( "-t", "--TFs", dest="fileTF", default=None, help="Supply a file listing PDB IDs w/ or w/o chain IDs of known TFs" )
@@ -520,6 +557,16 @@ def fileExist (file):               #Checks if a file exists AND is a file
 
 
 def TFinder(pdbs,tfs):
+  """
+  Evaluate candidate PDB chains and collect newly inferred TFs.
+
+  Args:
+   pdbs (set): ``(pdb_id, chain_or_none)`` candidates.
+   tfs (set): Existing ``(pdb_id, chain_or_none, family)`` TF entries.
+
+  Returns:
+   tuple: ``(tf_new, retry)`` sets with newly classified TFs and failed cases.
+  """
   tf_new=set()
   retry=set()
   tfs_chain={}
@@ -531,40 +578,37 @@ def TFinder(pdbs,tfs):
     if pdbid.lower() in tfs_chain: 
       print("Found in TFs")
       continue
-    #if True:
     try:
+          print("get PDB",pdbid)
           entry = getPDBEntry( pdbid )
           if( chain == None ):
             chains = getChains( entry )
             print("Chains",pdbid,chains)
             for chain in chains:
                try:
-               #if True:
                 if (isTF( pdbid.lower(), chain, entry )=="TF"):
                    print("Add TF ",pdbid.lower(), chain)
                    tf_new.add( (pdbid.lower(),chain.upper(),"Unknown") )
                 else:
                    print("It is not TF",pdbid.lower(), chain)
-               #else:
-               except:
+               except Exception as e:
+                   print("Retry later, failed ",e)
                    retry.add( (pdbid.lower(),chain.upper()) )
                    continue
           else:
             try:
-            #if True:
               print("Test as TF ",pdbid.lower(),chain)
               if (isTF( pdbid.lower(), chain , entry )=="TF"):
                   print("Add TF ",pdbid.lower(), chain)
                   tf_new.add( (pdbid.lower(),chain.upper(),"Unknown") )
               else:
                   print("It is not TF",pdbid.lower(), chain)
-            #else:
-            except:
+            except Exception as e:
+              print("Retry later, failed ",e)
               retry.add( (pdbid.lower(),chain.upper()) )
               continue
-    #else:
-    except:
-        print("Failed connection")
+    except Exception as e:
+        print("Failed connection, error ",e)
         if( chain == None ):retry.add( (pdbid.lower(),None))
         else:retry.add( (pdbid.lower(),chain.upper()) )
         continue
@@ -574,6 +618,7 @@ def TFinder(pdbs,tfs):
 
 def main():
 
+    # Step 1) Parse CLI options and load the candidate PDB list.
     options = parse_options()
  
     pdbs=set()
@@ -590,6 +635,7 @@ def main():
           pdbs.add((data[0],None))
     f.close()
 
+    # Step 2) Load the existing TF reference list (if provided).
     tfs=set()
     if fileExist(options.fileTF):
      f = open( options.fileTF ,'r')
@@ -607,10 +653,12 @@ def main():
      print("Input TF-list is missing\n")
 
   
+    # Step 3) Run TF classification and capture retry-able failures.
     retry=set()
     tf_new=set()
     (tf_new,retry)=TFinder(pdbs,tfs)
 
+    # Step 4) Write retry queue and new TF predictions.
     if (options.fileRetry is not None):
      for pdb_name,pdb_chain in retry:
        functions.write(options.fileRetry, "%s;%s" % (pdb_name, pdb_chain))  

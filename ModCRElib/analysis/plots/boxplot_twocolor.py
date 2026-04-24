@@ -11,6 +11,12 @@ import argparse
 from scipy import stats
 
 def parse_user_arguments(*args, **kwds):
+ """
+ Parse command-line options for two-color boxplot rendering.
+
+ Returns:
+  argparse.Namespace: Parsed plotting options and input/output paths.
+ """
  parser = argparse.ArgumentParser(
   description = "Create a BOXPLOT with a list of data files",
   epilog      = "@oliva's lab 2014")
@@ -43,13 +49,38 @@ def parse_user_arguments(*args, **kwds):
  return options
 
 def fileExist (file):
+ """
+ Check whether a path exists and is a regular file.
+
+ Args:
+  file (str): File path to test.
+
+ Returns:
+  bool: ``True`` when the path is an existing file.
+ """
  return os.path.exists(file) and os.path.isfile(file)
 
 def printverbose(f,flag,message):
- """Define verbose to print in file 'f', if 'flag'=True, message given as 'message'"""
+ """
+ Write a message to a stream when verbose mode is enabled.
+
+ Args:
+  f: Writable stream object.
+  flag (bool): If ``True``, emit ``message``.
+  message (str): Message text to write.
+
+ Returns:
+  None.
+ """
  if flag: f.write("%s"%(message))
 
 def main():
+ """
+ Entrypoint for loading options and generating the boxplot figure.
+
+ Returns:
+  None.
+ """
  options = parse_user_arguments()
  try:
   boxplotlist(options)
@@ -57,6 +88,15 @@ def main():
   print(("I/O error (%s): %s" %(e.errno, e.strerror)))
 
 def boxplotlist(options):
+ """
+ Build and save a two-color multi-dataset boxplot.
+
+ Args:
+  options (argparse.Namespace): Parsed CLI options.
+
+ Returns:
+  None.
+ """
 
  if fileExist(options.input):
   dataname=[]

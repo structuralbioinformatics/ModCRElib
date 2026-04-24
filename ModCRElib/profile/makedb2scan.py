@@ -1,3 +1,11 @@
+"""
+Build a PWM scanning database from a FASTA file and PWM files.
+
+The script prepares the sequence files expected by the ModCRE scanning
+pipeline, concatenates MEME PWM files into a single database file, and then
+delegates the final database assembly to ``ModCRElib.web.md2p.get_userdb``.
+"""
+
 import os, sys, re
 import configparser
 import json
@@ -64,9 +72,32 @@ pdb_dir = config.get("Paths", "pdb_dir")
 
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse command-line options for database generation from FASTA sequences.
+
+    How to run:
+        python makedb2scan.py -i PWMS_DIR -s FASTA_FILE
+            [-o OUTPUT_DIR -v]
+
+    Example:
+        python makedb2scan.py -i pwm_models -s proteins.fa -o scan_db -v
+
+    The parser configures:
+        - Input PWM directory and FASTA sequence source.
+        - Optional output directory for generated scan database artifacts.
+        - Verbose logging mode.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed options with the input PWM directory, the input
+        FASTA file, the optional output directory, and the verbosity flag.
+
+    Raises:
+        SystemExit: Triggered by ``OptionParser`` when required arguments are
+        missing or invalid.
+    """
 
     parser = optparse.OptionParser("Usage: makedb2scan.py -i PWMS_DIR -s FASTA_FILE  [-o OUTPUT_DIR -v]")
 
@@ -83,13 +114,22 @@ def parse_options():
     return options
 
 
-#---------------#
-# Main          #
-#---------------#
+def main():
+    """
+    Generate a scan-ready PWM database from FASTA sequences and motif files.
 
+    Workflow:
+        1. Parse command-line arguments and resolve the working directories.
+        2. Create per-protein FASTA files plus sequence lookup tables in the
+           output ``sequences`` directory.
+        3. Merge all MEME-formatted PWM files into ``pwm_database.txt``.
+        4. Call ``MD2P.get_userdb`` to build the final PWM database,
+           association file, and homologs directory used downstream.
 
-if __name__ == "__main__":
-
+    Returns:
+        None. The function writes its results to the selected output directory
+        and reports the generated paths to standard output.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -164,3 +204,10 @@ if __name__ == "__main__":
     print("HOMOLOGS DIRECTORY:\t%s"%(homologs_dir))
     print("\nDone")
 
+
+#---------------#
+# Main          #
+#---------------#
+
+if __name__ == "__main__":
+    main()

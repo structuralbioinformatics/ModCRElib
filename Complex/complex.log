@@ -1,20 +1,20 @@
 /soft/system/software/Python/3.8.6-GCCcore-10.2.0/lib/python3.8/site-packages/Bio/PDB/PDBParser.py:395: PDBConstructionWarning: Ignoring unrecognized record 'END' at line 1560
   warnings.warn(
 Model complex of DNA in fragment fragment_1-100
-	-- TF A9YTQ3.5n PDB 8 REGION 8-29 = Chains {'1A.'}
+	-- TF A9YTQ3.5n PDB 8 REGION 7-28 = Chains {'1A.'}
 POTENTIAL DIMERS DERIVED FROM DATA
 DIMERS DERIVED FROM DATA
 Done with dimers
 SELECT REGIONS
-	-- SELECTED TF A9YTQ3.5n REGION 8-29 = TEMPLATE 8 Chains {'1A.'}
-	Analyzing file ... BinaryInteractions/A9YTQ3.5nj8_1A.18-29:1:243_TF.pdb
+	-- SELECTED TF A9YTQ3.5n REGION 7-28 = TEMPLATE 8 Chains {'1A.'}
+	Analyzing file ... BinaryInteractions/A9YTQ3.5nj8_1A.17-28:1:243_TF.pdb
 		 TEMPLATE 8 CHAINS {'1A.'}
-	Select to use ... BinaryInteractions/A9YTQ3.5nj8_1A.18-29:1:243_TF.pdb
+	Select to use ... BinaryInteractions/A9YTQ3.5nj8_1A.17-28:1:243_TF.pdb
 CHAINS OF DIMERS
 Done with dimers
-	--BUILDING: check file ... BinaryInteractions/A9YTQ3.5nj8_1A.18-29:1:243_TF.pdb
-DNA sequence 1:AAAAAATTTAGGAGGCCCAAAA
-DNA sequence 2:GGAGGCCCAAAA
+	--BUILDING: check file ... BinaryInteractions/A9YTQ3.5nj8_1A.17-28:1:243_TF.pdb
+DNA sequence 1:AAAAAAACACGTCACCTTGAAA
+DNA sequence 2:CACGTCACCTTG
 		--CLASHES BY CHAINS:
 	--BUILDING: add as chain aa
 	--BUILDING: add as chain aa

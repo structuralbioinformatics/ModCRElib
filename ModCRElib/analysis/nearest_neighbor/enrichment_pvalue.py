@@ -42,6 +42,18 @@ def parse_options():
     return options
 
 def log_p_value(m,e,n,x):
+    """
+    Compute the log p-value approximation for enrichment settings.
+
+    Args:
+        m (int): Number of models.
+        e (float): Enrichment ratio in ``[0, 1]``.
+        n (int): Total number of motifs.
+        x (int): Number of selected top motifs.
+
+    Returns:
+        float | None: Log p-value estimate, or ``None`` when inputs are invalid.
+    """
     y=None
     if x<n and e<=1:
        #fx = np.log(float(x)/float(n)) + (x-1)*np.log(float(n-1)/float(n))
@@ -54,6 +66,15 @@ def log_p_value(m,e,n,x):
     return y
 
 def log_factorial(n):
+    """
+    Compute log-factorial using direct summation.
+
+    Args:
+        n (int): Non-negative integer.
+
+    Returns:
+        float: ``log(n!)``.
+    """
     x=0
     if n>0:
        for i in range(1,int(n+1)): 
@@ -61,12 +82,36 @@ def log_factorial(n):
     return x
 
 def log_combinatorial(n,m):
+    """
+    Compute log of the binomial coefficient ``C(n, m)``.
+
+    Args:
+        n (int): Population size.
+        m (int): Selected elements.
+
+    Returns:
+        float: ``log(C(n, m))`` when valid, otherwise ``0``.
+    """
     x=0
     if n>m:
        x =  log_factorial(n) - log_factorial(m) - log_factorial(n-m)
     return x
 
 def writetable(m,n,step,top_selected,enrichment,output_file):
+    """
+    Write an enrichment-vs-top table with p-values.
+
+    Args:
+        m (int): Number of models.
+        n (int): Number of motifs.
+        step (int): Step size for top selection scanning.
+        top_selected (int | None): Optional fixed top threshold.
+        enrichment (float | None): Optional fixed enrichment percentage.
+        output_file (str): Output table path.
+
+    Returns:
+        None.
+    """
     fo=open(output_file,"w")
     fo.write("#%14s\t%15s\t%15s\n"%("top","enrichment","p-value"))
     for p in range(1,101,1):
@@ -102,6 +147,17 @@ def writetable(m,n,step,top_selected,enrichment,output_file):
     fo.close()
 
 def best_enrichment(m,n,x):
+    """
+    Find minimal and maximal-support enrichment levels for a top cutoff.
+
+    Args:
+        m (int): Number of models.
+        n (int): Number of motifs.
+        x (int): Top selected motifs.
+
+    Returns:
+        tuple[int, int]: Minimum enrichment and enrichment with max p-value.
+    """
     max_LogpValue= -np.log(float(n))
     y = 1
     z = 1
@@ -123,6 +179,12 @@ def best_enrichment(m,n,x):
 #-------------#
 
 def main():
+    """
+    Parse options and generate the enrichment p-value table.
+
+    Returns:
+        None.
+    """
 
     # Arguments & Options #
     options = parse_options()

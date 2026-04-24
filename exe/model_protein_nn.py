@@ -183,41 +183,64 @@ class PirAlignment(object):
 #-------------#
 
 def fileExist(file):
-    '''
-    Check existing files
-    '''
+    """
+    Check whether a path exists and is a regular file.
+
+    Args:
+        file (str | None): Path to test.
+
+    Returns:
+        bool: ``True`` when ``file`` exists and is a regular file.
+    """
     if file is not None:
         return os.path.exists(file) and os.path.isfile(file)
     else:
         return False
 
 def make_subdirs(main, subdirs):
-    '''
-    This function makes all subdirs listed in "subdirs".
-    '''
+    """
+    Create a set of subdirectories under a parent directory.
+
+    Args:
+        main (str): Parent directory.
+        subdirs (list[str]): Relative subdirectory names to create.
+
+    Returns:
+        None.
+    """
 
     for subdir in subdirs:
         if not os.path.exists(os.path.join(main, subdir)):
             os.makedirs(os.path.join(main, subdir))
 
 def remove_files(files):
-    '''
-    This function removes all files listed in "files".
-    '''
+    """
+    Remove each file path in a list when present.
+
+    Args:
+        files (list[str]): Paths to remove.
+
+    Returns:
+        None.
+    """
 
     for each_file in files:
         if os.path.exists(each_file):
             os.remove(each_file)
 
 def bijection_sequence_to_sequence(sequences_a,sequences_b,dummy_dir="tmp",homodimer=False):
-    ''' 
-     Define the association of most similar sequences
-     sequences_a is a dictionary of sequences {name:sequence}
-     sequences_b is a dictionary of sequences {name:sequence}
-     dummy_dir  Dummy directory to cerate file
-     the output is a dictionary of associations {name_a:name_b} and {name_b:name_a}
+    """
+    Find best sequence-to-sequence associations between two sets.
 
-    '''
+    Args:
+        sequences_a (dict): Mapping ``name -> sequence``.
+        sequences_b (dict): Mapping ``name -> sequence``.
+        dummy_dir (str): Temporary directory for alignment files.
+        homodimer (bool): If ``True``, enforce homodimer-compatible assignments.
+
+    Returns:
+        tuple[dict, dict]: Forward and reverse bijection maps.
+    """
     #Initialize
     from SBI.structure.chain import Chain
     from SBI.structure.chain import ChainOfProtein
@@ -325,23 +348,23 @@ def bijection_sequence_to_sequence(sequences_a,sequences_b,dummy_dir="tmp",homod
     return pairing
 
 
+
+
 def chains_fixed(pdb):
-    ''' 
-     Rename the chains of PDB file located in path folder 
-     A,B,C,D ... for proteins
-     a,b,c,d ... for nucleid acids
+    """
+    Rename chains to canonical sequential IDs for proteins and nucleic acids.
 
-     path	Folder where PDB file is located
-     pdb 	PDB file
-     dummy_dir  Dummy directory to cerate files
+    Args:
+        pdb: Input PDB object.
 
-    '''
+    Returns:
+        tuple: ``(new_pdb, protein_references, nucleic_references)``.
+    """
     #Initialize
-    from SBI.structure.chain import Chain
-    from SBI.structure.chain import ChainOfProtein
-    from SBI.structure.chain import ChainOfNucleotide
-    from SBI.structure import PDB
-
+    from SBILib.structure.chain import Chain
+    from SBILib.structure.chain import ChainOfProtein
+    from SBILib.structure.chain import ChainOfNucleotide
+    from SBILib.structure import PDB
     protein_chains=list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     nucleic_chains=list("abcdefghijklmnopqrstuvwxyz")
     name_pdb=pdb.id
@@ -352,42 +375,74 @@ def chains_fixed(pdb):
     for chain_id in pdb.chain_identifiers:
         chain=pdb.get_chain_by_id(chain_id)
         print(("\t\t\t\tCHAIN ID: %s TYPE %s "%(chain_id,chain.chaintype)))
-        if chain.chaintype == "N": 
+        if chain.chaintype == "N" : 
             nucleic_ids.append(chain_id)
         else:
             protein_ids.append(chain_id)
     print(("\t\t\t\tPROTEIN CHAINS %s"%str(protein_ids)))
     print(("\t\t\t\tNUCLEIC CHAINS %s"%str(nucleic_ids)))
-    for i in range(len(nucleic_ids)):
-        chain_id = nucleic_ids[i]
+    nucleic_labels = relabel_codes_with_references(nucleic_ids,nucleic_chains)
+    protein_labels = relabel_codes_with_references(protein_ids,protein_chains)
+    n=0
+    for chain_id in pdb.chain_identifiers:
+        if chain_id in protein_ids: continue
         chain=pdb.get_chain_by_id(chain_id)
-        n=int(float(i)/len(nucleic_chains))
-        if n>0: new_id=nucleic_chains[i]+str(n)
-        else:   new_id=nucleic_chains[i]
+        if chain.chaintype != "N" : continue
+        check,new_id = nucleic_labels[n]
+        if check != chain_id:
+           print("Error in chain fixing, codes are different %s %s"%(chain_id,check))
+        n = n + 1
         chain.chain=new_id
         new_pdb.add_chain(chain)
-    for i in range(len(protein_ids)):
-        chain_id = protein_ids[i]
+    n=0
+    for chain_id in pdb.chain_identifiers:
+        if chain_id in nucleic_ids: continue
         chain=pdb.get_chain_by_id(chain_id)
-        n=int(float(i)/len(protein_chains))
-        if n>0: new_id=protein_chains[i]+str(n)
-        else:   new_id=protein_chains[i]
+        if chain.chaintype == "N": continue
+        check,new_id = protein_labels[n]
+        if check != chain_id:
+           print("Error in chain fixing, codes are different %s %s"%(chain_id,check))
+        n = n + 1
         chain.chain=new_id
         new_pdb.add_chain(chain)
-
     return new_pdb
 
+
+def relabel_codes_with_references(original_codes,base):
+    """
+    Given a list of original codes (e.g., ['a', 'b', 'a', 'c', ...]),
+    return a list of tuples: (original_code, new_unique_label)
+
+    Args:
+        original_codes (list[str]): Original chain/residue codes.
+        base (str | list[str]): Base alphabet used for relabeling.
+
+    Returns:
+        list[tuple[str, str]]: Original-to-new label mapping.
+    """
+    n = len(original_codes)
+    new_labels = []
+    for i in range(n):
+        letter = base[i % 26]
+        suffix = '' if i < 26 else str(i // 26)
+        new_label = str(letter)+str(suffix) 
+        new_labels.append((original_codes[i], new_label))
+    return new_labels
+
+
+
 def renumber_pdb(pdb_file,sequences,dummy_dir="/tmp"):
-    ''' 
-     Renumber PDB file located in path folder with the real sequences
+    """
+    Renumber residues in a PDB file according to reference sequences.
 
-     path	Folder where PDB file is located
-     pdb 	PDB file
-     sequences  dictionary of sequence tuples (name,seq) by chain id
-                chain identifier is the key of the dictionary
-     dummy_dir  Dummy directory to cerate files
+    Args:
+        pdb_file (str): Input PDB path.
+        sequences (dict): Chain-id to ``(name, sequence)`` mapping.
+        dummy_dir (str): Temporary directory for alignment files.
 
-    '''
+    Returns:
+        PDB: Renumbered PDB object.
+    """
 
     #Initialize
     from SBI.structure.chain import Chain
@@ -501,6 +556,17 @@ def renumber_pdb(pdb_file,sequences,dummy_dir="/tmp"):
     return new_pdb  
 
 def create_mapping(idx,structure,reference):
+    """
+    Build residue-number mapping between template sequence and reference sequence.
+
+    Args:
+        idx (list[str]): Original residue identifiers with insertion codes.
+        structure (str): Template-aligned sequence string.
+        reference (str): Reference-aligned sequence string.
+
+    Returns:
+        dict: Mapping ``(old_number, old_version) -> (new_number, new_version)``.
+    """
     mapped={}
     n=0
     m=0
@@ -590,23 +656,30 @@ def parse_options():
 def get_pir_alignments(query_file, pdb_dir, full_mode=False,  filter_twilight_zone_hits=False, resolutions=None, select_mode=False, dummy_dir="/tmp/", original_sequence=None, 
                        thread_obj=None, no_restrict_usage=False, dimer_mode=False, monomer_mode=False, verbose=False, filter_restrictive=False, best_mode=False, iteration=0, start_time=0,id_max=1):
     """
-    This function blasts a query sequence against the PDB database and 
-    returns a list of {PirAlignment}s, according to some criteria.
+    Blast query sequence(s) and build candidate PIR alignments.
 
-    @input:
-    query_file {filename}
-    pdb_dir {directory}
-    filter_twilight_zone_hits {boolean} default = False
-    resolutions {dict} default = None
-    select_mode {boolean} selects either monomers or dimers, whichever has more hits; default = False
-    dimer_mode {boolean} only dimer templates are allowed
-    monomer_mode {boolean} only monomer templates are allowed
-    dummy_dir {directory} default = /tmp
-    verbose {boolean} to print output steps of the work
-    filter_restrictive {boolean} default = False to be retsrictive on the twilight_zone_hits criterion
-    @return:
-    selected_pir_alignments / pir_alignments {list} of {PirAlignment}
+    Args:
+        query_file (str): Query FASTA file.
+        pdb_dir (str): PDB workspace directory.
+        full_mode (bool): Enable recursive modeling of uncovered fragments.
+        filter_twilight_zone_hits (bool): Apply twilight-zone filtering.
+        resolutions (dict | None): Optional template-resolution map.
+        select_mode (bool): Keep either monomers or dimers with better support.
+        dummy_dir (str): Temporary directory.
+        original_sequence (list | None): Original sequence context for recursion.
+        thread_obj (tuple | None): Optional threading-derived hit.
+        no_restrict_usage (bool): Allow relaxed interface constraints.
+        dimer_mode (bool): Force dimer templates.
+        monomer_mode (bool): Force monomer templates.
+        verbose (bool): Verbose logging flag.
+        filter_restrictive (bool): Keep strict twilight filters.
+        best_mode (bool): Keep only best hit per query.
+        iteration (int): Current recursion iteration.
+        start_time (float): Start timestamp for recursion budget.
+        id_max (float): Maximum identity threshold for accepted templates.
 
+    Returns:
+        list: Selected ``PirAlignment`` objects.
     """
 
     # Initialize #
@@ -1099,20 +1172,20 @@ def get_pir_alignments(query_file, pdb_dir, full_mode=False,  filter_twilight_zo
 
 def filter_blast_hits_by_interface(query_file, blast_obj, pdb_dir, filter_twilight_zone_hits=False, dummy_dir="/tmp/", no_restrict=False,best_mode=False,id_max=1.0):
     """
-    This function filters hits if the query does not cover all interface
-    interface residues or the alignments contain insertions or deletions in
-    structured regions containing any interface residues.
+    Filter BLAST hits by interface coverage and alignment quality constraints.
 
-    @input:
-    query_file {filename}
-    blast_obj {BlastOutput}
-    pdb_dir {directory}
-    filter_twilight_zone_hits {boolean} default = False
-    dummy_dir {directory} default = /tmp
+    Args:
+        query_file (str): Query FASTA file.
+        blast_obj: BLAST output object.
+        pdb_dir (str): PDB workspace directory.
+        filter_twilight_zone_hits (bool): Apply twilight-zone filtering.
+        dummy_dir (str): Temporary directory.
+        no_restrict (bool): Relax interface constraints.
+        best_mode (bool): Keep only the first accepted hit.
+        id_max (float): Maximum identity threshold.
 
-    @return:
-    unfiltered_hits {list}
-    
+    Returns:
+        list: Accepted hit tuples with alignment metadata.
     """
     
     # Initialize #
@@ -1213,21 +1286,14 @@ def filter_blast_hits_by_interface(query_file, blast_obj, pdb_dir, filter_twilig
 
 def exec_matcher(A, B):
     """
-    This function aligns a pair of sequences "A" and "B" using
-    matcher from the EMBOSS package.
+    Align two sequence files using EMBOSS `matcher`.
 
-    @input:
-    query_file {filename}
-    hit_file {filename}
+    Args:
+        A (str): Query FASTA path.
+        B (str): Template FASTA path.
 
-    @return:
-    query_alignment {string} or None
-    hit_alignment {string} or None
-    query_start {int} or None
-    query_end {int} or None
-    hit_start {int} or None
-    hit_end {int} or None
-
+    Returns:
+        tuple: ``(query_alignment, hit_alignment, query_start, query_end, hit_start, hit_end, identity, similarity)``.
     """
 
 
@@ -1282,18 +1348,15 @@ def exec_matcher(A, B):
 
 def get_sequence_to_crystal_correlations(pdb_obj, pdb_chain, gapped=True):
     """
-    This function returns the 1 to 1 correlation between sequence and crystal
-    positions.
+    Build 1-to-1 mappings between sequence and crystal residue numbering.
 
-    @input:
-    pdb_obj {PDB}
-    pdb_chain {string}
-    gapped {boolean} default = True
+    Args:
+        pdb_obj: PDB object.
+        pdb_chain (str): Chain identifier.
+        gapped (bool): Use gapped sequence representation.
 
-    @return:
-    sequence_to_crystal {dictionary} sequence position, crystal position
-    crystal_to_sequence {dictionary} crystal position, sequence position
-    
+    Returns:
+        tuple[dict, dict]: Sequence-to-crystal and crystal-to-sequence maps.
     """
 
     # Initialize #
@@ -1326,6 +1389,19 @@ def get_sequence_to_crystal_correlations(pdb_obj, pdb_chain, gapped=True):
     return sequence_to_crystal, crystal_to_sequence
 
 def readjust_alignments_to_crystal_sequence(pdb_chain_obj, query_alignment, hit_alignment, hit_start, hit_end):
+    """
+    Pad query/hit alignments to full gapped crystal-chain length.
+
+    Args:
+        pdb_chain_obj: Protein chain object with ``gapped_protein_sequence``.
+        query_alignment (str): Query alignment segment.
+        hit_alignment (str): Template alignment segment.
+        hit_start (int): Alignment start index in hit sequence (1-based).
+        hit_end (int): Alignment end index in hit sequence (1-based).
+
+    Returns:
+        tuple[str, str]: Full-length query and structure alignments.
+    """
     # Initialize #
     sequence_alignment = "-" * len(pdb_chain_obj.gapped_protein_sequence[:hit_start - 1]) + query_alignment + "-" * len(pdb_chain_obj.gapped_protein_sequence[hit_end:])
     structure_alignment = pdb_chain_obj.gapped_protein_sequence[:hit_start - 1] + hit_alignment + pdb_chain_obj.gapped_protein_sequence[hit_end:]
@@ -1333,6 +1409,20 @@ def readjust_alignments_to_crystal_sequence(pdb_chain_obj, query_alignment, hit_
     return sequence_alignment, structure_alignment
 
 def get_protein_models(pir_alignment_obj, pdb_dir, n=1, dummy_dir="/tmp/", verbose=False, optimization=False):
+    """
+    Run Modeller to generate protein-DNA structural models from PIR alignment.
+
+    Args:
+        pir_alignment_obj (PirAlignment): Alignment/template configuration.
+        pdb_dir (str): PDB asset directory.
+        n (int): Number of models to generate.
+        dummy_dir (str): Temporary working directory.
+        verbose (bool): Verbose logging flag.
+        optimization (bool): Whether to enable model optimization.
+
+    Returns:
+        list: Generated model PDB objects.
+    """
 
     # Initialize #
     models = []
@@ -1431,6 +1521,16 @@ def get_protein_models(pir_alignment_obj, pdb_dir, n=1, dummy_dir="/tmp/", verbo
     return [i[-1] for i in models]
 
 def get_identities(A, B):
+    """
+    Count exact identity positions between two aligned sequences.
+
+    Args:
+        A (str): First aligned sequence.
+        B (str): Second aligned sequence.
+
+    Returns:
+        int: Number of positions with identical amino-acid letters.
+    """
 
     # Initialize #
     identities = 0
@@ -1443,6 +1543,16 @@ def get_identities(A, B):
     return identities
 
 def get_aligned_residues(A, B):
+    """
+    Count aligned non-gap, non-unknown residue pairs.
+
+    Args:
+        A (str): First aligned sequence.
+        B (str): Second aligned sequence.
+
+    Returns:
+        int: Number of aligned residue-residue positions.
+    """
 
     # Initialize #
     aligned_residues = 0
@@ -1455,6 +1565,15 @@ def get_aligned_residues(A, B):
     return aligned_residues
 
 def get_sequence_residues(sequence):
+    """
+    Count valid residue letters in a sequence string.
+
+    Args:
+        sequence (str): Sequence that may include unknown placeholders.
+
+    Returns:
+        int: Number of alphabetic residues excluding ``x``/``X``.
+    """
 
     # Initialize #
     residues = 0
@@ -1468,14 +1587,13 @@ def get_sequence_residues(sequence):
 
 def get_non_overlapping_pir_alignments(alignments_list):
     """
-    This function returns a non-overlapping list of PIR alignments. 
+    Filter PIR alignments to keep non-overlapping sequence regions.
 
-    @input:
-    alignments_list {list} of {PirAlignment} objects
+    Args:
+        alignments_list (list): PIR alignment objects.
 
-    @return:
-    non_overlapping_alignments_list {list} of non-overlapping {PirAlignment} objects
-    
+    Returns:
+        list: Non-overlapping PIR alignment objects.
     """
 
     # Initialize #

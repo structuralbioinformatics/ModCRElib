@@ -1,3 +1,7 @@
+"""
+Generate PWMs for grid-search combinations and evaluate TOMTOM consistency.
+"""
+
 import os, sys, re
 from collections import Counter
 import configparser
@@ -50,9 +54,14 @@ from ModCRElib.msa import pwm_pbm as PWM
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for PWM generation/evaluation in grid-search mode.
 
+    How to run:
+        ``python grid_search_get_pwms.py --pbm pbm_dir --pdb pdb_dir -p model.pdb``
+
+    Returns:
+        optparse.Values: Namespace with PBM/PDB roots, optional precomputed
+        files, threshold selection, and verbosity controls.
     """
 
     parser = optparse.OptionParser("python %prog --pbm=<pbm_dir> --pdb=<pdb_dir> --pwm=<pwm_dir> [--dummy=<dummy_dir> -o <output_dir> --start=<start_step> --stop=<stop_step> -v]")
@@ -83,7 +92,7 @@ def parse_options():
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse options and initialize output subdirectories.
     options = parse_options()
     if options.reduce_thresholds:
            selected_thresholds=[70,74,78,82,86,90,94,98]

@@ -15,6 +15,13 @@
 7) Change paths in ModCRElib/configure/config.ini to point to the correct location for your installations. <br/>
     a) Some of the files are provided, in these cases the appended "~/Path/To/Install/" just needs to be replaced with the path of the install<br/>
     b) For SBILib you can either use the path to the provided package or use an independant install <br/>
+8) Download PWM databases<br/>
+    a) jaspar pwm database  (https://jaspar.elixir.no/downloads/) <br/>
+    b) cisbp location of cisbp pwm database (https://cisbp.ccbr.utoronto.ca/bulk.php) <br/>
+    c) hocomoco location of hocomoco pwm database (https://hocomoco14.autosome.org/downloads_v11) <br/>
+    d) Place each folder in ExternalPWMs and rename to CisBP_pwms,hocomoco_pwms,jaspar_pwms   
+
+
 
 ## Dependencies:
 

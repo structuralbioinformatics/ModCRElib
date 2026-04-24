@@ -1,3 +1,11 @@
+"""
+Locate the best PWM-supported binding region in a DNA sequence for a TF-DNA structure.
+
+This script scans an input DNA sequence with a PWM, selects the best supported
+binding region, optionally rescoring nearby alternatives with structural
+potentials, and finally generates threaded TF-DNA models for the selected site.
+"""
+
 import os, sys, re
 import configparser
 import optparse
@@ -56,7 +64,29 @@ from SBILib.structure import PDB
 # Functions   #
 #-------------#
 
-def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_dir,pdb_dir,pbm_dir,radius, potential_file, split_potential, auto_mode, family_potentials, pbm_potentials, score_threshold, taylor_approach, pmf , bins_approach, known, verbose=False,dummy_dir="/tmp"):
+def get_threads_with_best_binding(binding,delta,standard,pwm_file,dna_sequence,pdb_file,input_dir,pdb_dir,pbm_dir,radius, potential_file, split_potential, auto_mode, family_potentials, pbm_potentials, score_threshold, taylor_approach, pmf , bins_approach, known, p_val_max, verbose=False,dummy_dir="/tmp",fragment_restrict=None, binding_restrict=None,clean=False,wobble=False,methylation=False):
+    """
+    Find the best-supported binding site and build threaded models for it.
+
+    Args:
+        binding (str | None): Optional binding sequence that must be matched.
+        delta (int): Window extension around the initial FIMO match to rescore.
+        standard (bool): If True, use only standard nucleotides while rescoring.
+        pwm_file (str): PWM file in MEME format.
+        dna_sequence (str): DNA sequence to scan.
+        pdb_file (str): Input TF-DNA PDB structure.
+        input_dir (str): Output/input directory for generated threading files.
+        pdb_dir, pbm_dir (str): ModCRE data directories.
+        radius, potential_file, split_potential, auto_mode, family_potentials,
+        pbm_potentials, score_threshold, taylor_approach, pmf, bins_approach,
+        known, p_val_max, verbose, dummy_dir, fragment_restrict,
+        binding_restrict, clean, wobble, methylation: Workflow parameters
+        forwarded to the structural scoring and threading helpers.
+
+    Returns:
+        list: Threading objects/files returned by ``pdb2thread.pdb2thread`` for
+        the selected best binding region.
+    """
 
     #Get msa_objs
     if verbose: sys.stdout.write("\t-- Assign MSA objs to %s \n"%pwm_file)
@@ -64,6 +94,12 @@ def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_d
     msa_obj=PWM.nMSA(pwm_file,option="meme")
     for sp in ["3d", "3dc", "local", "pair", "s3dc", "s3dc_dd", "s3dc_di"]:
         msa_objs.setdefault(sp,msa_obj)
+
+    if binding is not None: 
+       binding   = binding.upper()
+       reverse   = functions.reverse_dna(binding)
+    else:
+       reverse   = None
 
     #Get families
     families = {}
@@ -120,13 +156,19 @@ def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_d
     # Get PDB object
     if verbose: sys.stdout.write("\t-- Reading PDB file %s ...\n"%pdb_file)
     pdb_obj = PDB(pdb_file)
+    if clean:
+       pdb_obj.clean()
+       dummy_pdb_file = os.path.join(dummy_dir,"pdb_file.pdb")
+       pdb_obj.write(dummy_pdb_file)
+    else:
+       dummy_pdb_file = pdb_file
     pdb_name= pdb_obj.id
     # Get DSSP object #
     if verbose: sys.stdout.write("\t\t-- Get DSSP ...\n")
-    dssp_obj = dssp.get_dssp_obj(pdb_file)
+    dssp_obj = dssp.get_dssp_obj(dummy_pdb_file)
     # Get X3DNA object #
     if verbose: sys.stdout.write("\t\t-- Get DNA object ...\n")
-    x3dna_obj = x3dna.get_x3dna_obj(pdb_file, dummy_dir)
+    x3dna_obj = x3dna.get_x3dna_obj(dummy_pdb_file, dummy_dir)
     # Get contacts object #
     if verbose: sys.stdout.write("\t\t-- Get contacts ...\n")
     contacts_obj = contacts.get_contacts_obj(pdb_obj, x3dna_obj)
@@ -134,7 +176,7 @@ def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_d
     if len(contacts_obj._contacts) == 0: exit("No protein-DNA contacts found!")
     # Get interface object #
     if verbose: sys.stdout.write("\t\t-- Get interface ...\n")
-    interface_obj = interface.get_interface_obj(pdb_obj, x3dna_obj, contacts_obj, os.path.abspath(options.dummy_dir))
+    interface_obj = interface.get_interface_obj(pdb_obj, x3dna_obj, contacts_obj, os.path.abspath(dummy_dir))
     # Get DNA template
     dna_template_seq=[]
     for chain_id in pdb_obj.chain_identifiers:
@@ -148,10 +190,10 @@ def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_d
     #size = interface_obj.get_interface_length()
     # Check DNA sequence length in PDB
     # If the length of DNA in PDB matches the binding, return solution
-    if len(found_sequence) == interface_obj.get_interface_length() and size==len(found_sequence):
+    if len(found_sequence) == interface_obj.get_interface_length() and size==len(found_sequence) and not wobble:
        try:
           if verbose:sys.stdout.write("\t-- Model DNA ...\n")
-          pdb_obj_new = model_dna.get_dna_model_pdb_obj(input_file,found_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir=dummy_dir)
+          pdb_obj_new = model_dna.get_dna_model_pdb_obj(dummy_pdb_file,found_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir=dummy_dir)
        except Exception as e:
           print(("Error: %s"%e))
           raise ValueError(e)
@@ -188,7 +230,8 @@ def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_d
            test_sequence = dna_sequence[i:i+size]
            if has_methylation(dna_sequence) and not has_methylation(test_sequence): continue
            temp_sequence = test_sequence.upper().replace("X","C").replace("O","C").replace("J","G").replace("Q","G")
-           pdb_test      = model_dna.get_dna_model_pdb_obj(input_file,temp_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir=dummy_dir)
+           pdb_test      = model_dna.get_dna_model_pdb_obj(dummy_pdb_file,temp_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir=dummy_dir)
+           if clean: pdb_test.clean()
            dummy_file    = os.path.join(dummy_dir,"test.pdb")
            pdb_test.write(dummy_file,force=True)
            # Get DSSP object #
@@ -199,7 +242,7 @@ def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_d
            dummy_x3dna_obj = x3dna.get_x3dna_obj(dummy_file, dummy_dir)
            # Get contacts object #
            if verbose: sys.stdout.write("\t\t-- Get contacts ...\n")
-           dummy_contacts_obj = contacts.get_contacts_obj(pdb_test, x3dna_obj)
+           dummy_contacts_obj = contacts.get_contacts_obj(pdb_test, dummy_x3dna_obj)
            # Get triads object #
            if verbose: sys.stdout.write("\t\t-- Get triads ...\n")
            if standard:
@@ -235,7 +278,7 @@ def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_d
        if verbose: sys.stdout.write("\t-- Selected [ %d - %d ] %f ...\n"%(start_position,start_position+size+1,max_score))
        if verbose: sys.stdout.write("\t-- Selected sequence %s \n"%(bind_sequence))
        try:
-          pdb_obj_new = model_dna.get_dna_model_pdb_obj(input_file,found_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir=dummy_dir)
+          pdb_obj_new = model_dna.get_dna_model_pdb_obj(pdb_file,found_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir=dummy_dir)
        except Exception as e:
           print(("Error: %s"%e))
           raise Exception("Failed to model DNA ",e)
@@ -249,9 +292,32 @@ def get_threads_with_best_binding(binding,pwm_file,dna_sequence,pdb_file,input_d
 
      
 def parse_options():
-    '''
-    Create threading files with a PDB template and a PWM in the best binding region of a DNA sequence.
-    '''
+    """
+    Parse the command line options for best-binding detection and threading.
+
+    How to run:
+        python get_best_binding.py -i PDB_FILE --pwm MEME_FILE --seq FASTA_FILE
+            --pbm PBM_DIR --pdb PDB_DIR -o OUTPUT_DIR
+            [--dna BINDING_SEQ --delta N --pval PVALUE --standard -v]
+            [pwm options] [statistical potential options]
+
+    Example:
+        python get_best_binding.py -i complex.pdb --pwm motif.meme --seq dna.fa
+            --pbm pbm_data --pdb pdb_data -o best_binding -v
+
+    The parser configures:
+        - Input structure, PWM motif, and DNA-sequence scan target.
+        - PBM/PDB resources and output/logging controls.
+        - Binding-window and wobble/clean behavior.
+        - PWM refinement and statistical-potential configuration.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options describing the structure, PWM, DNA
+        sequence, output paths, and scoring/refinement settings.
+    """
 
     parser = optparse.OptionParser("get_best_binding -i PDB_FILE --pwm MEME_FILE -seq FASTA_FILE -o OUTPUT_NAME --pbm PBM_FOLDER --pdb PDB_FOLDER [--dna SPECIFIC_BINDING --dummy DUMMY_DIR --standard --delta DELTA --pval P-VALUE][PWM OPTIONS][STATISTICAL POTENTIAL OPTIONS]")
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="DUMMY_DIR") 
@@ -271,13 +337,17 @@ def parse_options():
                         help="PDB directory" )
     parser.add_option("--pbm", action="store",  dest="pbm_dir",  default=None, metavar="FOLDER",
                         help="PBM directory" )
-    parser.add_option('--standard', dest = 'standard', action = 'store_true',metavar="{boolean}",
+    parser.add_option('--standard', default=False, dest = 'standard', action = 'store_true',metavar="{boolean}",
                         help = 'Flag to use standard unmethylated nucleotides for the best binding region. The output will have the right sequence (default is False)')
     parser.add_option("--info",default=None,action="store", type="string", dest="info",help="Information LOG file of PDB files that have failed and have been completed")
     parser.add_option('-o', '--output_dir', dest = 'output_dir', action = 'store', default = None, metavar='{string}',
                         help = 'Output folder for PDB and thread files')
     parser.add_option('-v', '--verbose', dest = 'verbose', action = 'store_true',metavar="{boolean}",
                         help = 'Flag for verbose mode (default is False)')
+    parser.add_option('-c', '--clean', dest = 'clean', action = 'store_true',metavar="{boolean}",
+                        help = 'Flag to clean the PDB files and renumber staring at 1 (default is False)')
+    parser.add_option('-w', '--wobble', dest = 'wobble', action = 'store_true',metavar="{boolean}",
+                        help = 'Flag to wobble around binding and check variations of +/- delta around best binding (default is False, unless the best binding differs from the interface)')
 
     pwm_options = optparse.OptionGroup(parser,"Data to calculate redo the PWM")
 
@@ -316,17 +386,32 @@ def parse_options():
     return options
 
 def has_methylation(sequence):
+    """
+    Check whether a DNA sequence contains methylation-specific symbols.
+
+    Args:
+        sequence (str): DNA sequence to inspect.
+
+    Returns:
+        bool: True when the sequence contains any of ``X``, ``J``, ``O``, or ``Q``.
+    """
     for x in list("XJOQ"):
         if x in sequence:
             return True
     return False
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line workflow for selecting the best PWM-supported binding site.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Read the input structure, PWM, and DNA sequence.
+        2. Use FIMO and optional rescoring to choose the best binding region.
+        3. Generate threaded TF-DNA models for the chosen region.
 
+    Returns:
+        None. Output models/files are written into the requested output directory.
+    """
     # Arguments & Options #
     options = parse_options()
     if not os.path.exists(options.dummy_dir): 
@@ -373,6 +458,8 @@ if __name__ == "__main__":
     reset                = options.reset
     refine               = options.refine
     info                 = options.info
+    clean                = options.clean
+    wobble               = options.wobble
 
 
     if info is None:
@@ -436,7 +523,7 @@ if __name__ == "__main__":
     #Get Threads with best binding sequence
     try:
          if verbose: sys.stdout.write("\t-- Getting Threads ...\n")
-         thread_objs= get_threads_with_best_binding(binding,pwm_file,dna_sequence,input_pdb_file,input_dir,pdb_dir,pbm_dir,radius, potential_file, split_potential, auto_mode, family_potentials, pbm_potentials, score_threshold, taylor_approach, pmf , bins_approach, known,verbose,dummy_dir)
+         thread_objs= get_threads_with_best_binding(binding,delta,standard,pwm_file,dna_sequence,input_pdb_file,input_dir,pdb_dir,pbm_dir,radius, potential_file, split_potential, auto_mode, family_potentials, pbm_potentials, score_threshold, taylor_approach, pmf , bins_approach, known,p_val_max,verbose,dummy_dir,fragment_restrict, binding_restrict,clean,wobble,methylation)
     except:
          log_file=open(info,"a")
          log_file.write("%s\tFAIL\n"%(os.path.basename(input_file)))
@@ -456,7 +543,10 @@ if __name__ == "__main__":
         threading_pdb_chain = thr_obj.get_pdb_chain()
         template_pdb        = os.path.join(input_dir,threading_pdb_name+"_"+threading_pdb_chain+".pdb")
         if verbose: sys.stdout.write("\t-- Write template file %s\n"%(os.path.basename(template_pdb)))
-        shutil.move(template_pdb,os.path.join(output_dir,os.path.basename(template_pdb)))
+        pdb_obj = PDB(template_pdb)
+        pdb_obj.clean()
+        pdb_obj.write(os.path.join(output_dir,os.path.basename(template_pdb)))
+        #shutil.move(template_pdb,os.path.join(output_dir,os.path.basename(template_pdb)))
         output_file = os.path.join(output_dir,threading_pdb_name+"_"+threading_pdb_chain)
         output_complex = output_complex + threading_pdb_chain
         kmers=thr_obj.get_kmers()
@@ -493,9 +583,11 @@ if __name__ == "__main__":
        print("Remaining DUMMY files, not cleanded")
 
     if verbose: print("Done")
-    
 
 
+#-------------#
+# Main        #
+#-------------#
 
-
-
+if __name__ == "__main__":
+    main()

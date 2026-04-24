@@ -43,15 +43,30 @@ from ModCRElib.profile import tomtom as TOMTOM
 
 
 def fileExist(file):
-    '''
-    Check existing files
-    '''
+    """
+    Check whether a path exists and is a regular file.
+
+    Args:
+        file (str | None): Path to validate.
+
+    Returns:
+        bool: ``True`` when ``file`` exists and is a regular file.
+    """
     if file is not None:
         return os.path.exists(file) and os.path.isfile(file)
     else:
         return False
 
 def clean_name(name):
+    """
+    Normalize a string for safe filename usage.
+
+    Args:
+        name (str): Input label or family name.
+
+    Returns:
+        str: Sanitized string with separators replaced by underscores.
+    """
     new_name=""
     for x in name:
         if x == "/" or x == "," or x == ";" or x == " ": new_name= new_name + "_"
@@ -104,6 +119,15 @@ def parse_options():
     return options
 
 def parse_mmseq_comparisons(input_file):
+    """
+    Parse MMseqs comparison output into per-query neighbour tuples.
+
+    Args:
+        input_file (str): MMseqs tabular output.
+
+    Returns:
+        dict | None: Query-to-hit tuples map, or ``None`` when file is missing.
+    """
     compair={}
     if fileExist(input_file):
        fi=open(input_file,"r")
@@ -123,6 +147,15 @@ def parse_mmseq_comparisons(input_file):
        return None
 
 def parse_table(table):
+    """
+    Parse TF-vs-TF TOMTOM comparison table.
+
+    Args:
+        table (str): Input table path.
+
+    Returns:
+        dict: Mapping ``(tf_query, tf_target)`` to score tuple.
+    """
     tf_compare={}
     fo=open(table,"r")
     for line in fo:
@@ -133,6 +166,15 @@ def parse_table(table):
     return tf_compare
 
 def parse_table_models(table):
+    """
+    Parse TF model TOMTOM comparison table.
+
+    Args:
+        table (str): Input table path.
+
+    Returns:
+        dict: Mapping ``(tf_query, tf_model)`` to score tuple.
+    """
     tf_models={}
     fo=open(table,"r")
     for line in fo:
@@ -143,6 +185,16 @@ def parse_table_models(table):
     return tf_models
 
 def parse_tfs_motifs(input_file,pbm_dir):
+    """
+    Parse TF-to-motif mappings and build sequence name dictionaries.
+
+    Args:
+        input_file (str): TF/motif correspondence file.
+        pbm_dir (str): PBM directory containing TF sequence FASTA files.
+
+    Returns:
+        tuple[dict, dict, dict]: TF-to-motif map and forward/reverse name maps.
+    """
     tf_has_motif={}
     tf_nameseq={}
     tf_nameseq_rev={}
@@ -165,6 +217,15 @@ def parse_tfs_motifs(input_file,pbm_dir):
     return tf_has_motif,tf_nameseq,tf_nameseq_rev
 
 def parse_tfs_models(input_models):
+    """
+    Parse TF-to-model motif correspondences.
+
+    Args:
+        input_models (str): File listing TF ids and modeled motif files.
+
+    Returns:
+        dict: TF-to-list of ``(pdb_file, motif_file)`` mappings.
+    """
 
     tf_has_model={}
     fd=open(input_models,"r")
@@ -182,6 +243,17 @@ def parse_tfs_models(input_models):
     return tf_has_model
       
 def normalizing(x,mx,mn):
+    """
+    Normalize a value to the 0-100 range.
+
+    Args:
+        x (float): Value to normalize.
+        mx (float): Maximum scale value.
+        mn (float): Minimum scale value.
+
+    Returns:
+        float: Normalized value clipped at zero.
+    """
     y=x
     if mx>mn:
        y = 100* (x - mn) / (mx - mn)
@@ -191,6 +263,19 @@ def normalizing(x,mx,mn):
 
 
 def extract_TP_ratio(filename,suffix,size,top,step):
+       """
+       Extract true-positive ratio curves from ranking files.
+
+       Args:
+           filename (str): Input file prefix.
+           suffix (str): Input file suffix.
+           size (int): Number of motifs in ranking universe.
+           top (int): Top-rank threshold considered positive.
+           step (int): Identity bin step.
+
+       Returns:
+           dict: Identity-bin midpoint to TP ratio.
+       """
        tpr={} 
        for perc in range(100,step,-step):
          middle=int(perc-step/2)
@@ -208,6 +293,19 @@ def extract_TP_ratio(filename,suffix,size,top,step):
        return tpr
 
 def plotcurve(p,a,b,out,title):
+  """
+  Plot and save TP-ratio curves for sequence and model comparisons.
+
+  Args:
+      p (list[float]): X-axis identity percentages.
+      a (list[float]): Sequence-based TP ratios.
+      b (list[float]): Model-based TP ratios.
+      out (str): Output image path.
+      title (str): Plot title.
+
+  Returns:
+      None.
+  """
   x = np.array(p)
   y = np.array(a)
   z = np.array(b)
@@ -221,10 +319,34 @@ def plotcurve(p,a,b,out,title):
   plt.close()
 
 def printverbose(f,flag,message):
- """Define verbose to print in file 'f', if 'flag'=True, message given as 'message'"""
+ """
+ Write a message to a stream when verbose mode is enabled.
+
+ Args:
+     f: Writable stream object.
+     flag (bool): If ``True``, emit message.
+     message (str): Message content.
+
+ Returns:
+     None.
+ """
  if flag: f.write("%s"%(message))
 
 def create_inputboxplot(input_name,label,plot_step,fileroot,selected_score,verbose):
+    """
+    Create helper file listing boxplot groups and target data files.
+
+    Args:
+        input_name (str): Output list file path.
+        label (str): Group label prefix.
+        plot_step (int): Identity bin width.
+        fileroot (str): Prefix for generated data files.
+        selected_score (int): Selected score index (reserved).
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        None.
+    """
     file_root=fileroot+"_"+label+"_"
     if verbose: sys.stdout.write("Global PLOT, input %s \n"%(input_name))
     fo=open(input_name,"w")
@@ -237,6 +359,22 @@ def create_inputboxplot(input_name,label,plot_step,fileroot,selected_score,verbo
     fo.close()
 
 def create_seqboxplot_global_enrichment(tf,plot_step,fileroot,selected_score,normalize,maximum,minimum,verbose):
+    """
+    Write global sequence-based enrichment score files.
+
+    Args:
+        tf (dict): Enrichment scores keyed by ``(tf_name, identity_bin)``.
+        plot_step (int): Identity bin width.
+        fileroot (str): Prefix for generated files.
+        selected_score (int): Score index to plot.
+        normalize (bool): Whether to normalize selected score.
+        maximum (float): Normalization maximum.
+        minimum (float): Normalization minimum.
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        dict: Identity bin to set of TF names present in that bin.
+    """
     found_interval={}
     label = "global"
     for tf_enrich, scores in tf.items():
@@ -253,6 +391,22 @@ def create_seqboxplot_global_enrichment(tf,plot_step,fileroot,selected_score,nor
 
  
 def create_seqboxplot_global(tf,plot_step,fileroot,selected_score,normalize,maximum,minimum,verbose):
+    """
+    Write global sequence-comparison score files by identity intervals.
+
+    Args:
+        tf (dict): TF-pair to score tuple map.
+        plot_step (int): Identity bin width.
+        fileroot (str): Output file prefix.
+        selected_score (int): Score index to extract.
+        normalize (bool): Whether to normalize the score.
+        maximum (float): Maximum value for normalization.
+        minimum (float): Minimum value for normalization.
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        dict: Found TF names grouped by interval.
+    """
     if selected_score > 3: selected_score=3
     found_interval={}
     label = "global"
@@ -272,6 +426,23 @@ def create_seqboxplot_global(tf,plot_step,fileroot,selected_score,normalize,maxi
     return found_interval
 
 def create_mdlboxplot_global(tf,found_interval,plot_step,fileroot,selected_score,normalize,maximum,minimum,verbose):
+    """
+    Write global model-comparison score files aligned to sequence intervals.
+
+    Args:
+        tf (dict): TF-model to score tuple map.
+        found_interval (dict): Interval-to-TF set from sequence pass.
+        plot_step (int): Identity bin width.
+        fileroot (str): Output file prefix.
+        selected_score (int): Score index to extract.
+        normalize (bool): Whether to normalize the score.
+        maximum (float): Maximum value for normalization.
+        minimum (float): Minimum value for normalization.
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        None.
+    """
     for tf_pair, scores in tf.items():
         for perc in range(plot_step,100,plot_step):
             middle=int(perc+plot_step/2)
@@ -286,6 +457,25 @@ def create_mdlboxplot_global(tf,found_interval,plot_step,fileroot,selected_score
               fo.close()
 
 def create_seqboxplot_family_enrichment(tf,tf_nameseq,tf_nameseq_rev,families,plot_step,fileroot,selected_score,normalize,maximum,minimum,verbose):
+    """
+    Write family-specific sequence enrichment score files.
+
+    Args:
+        tf (dict): Enrichment score map.
+        tf_nameseq (dict): TF-name to sequence-name map.
+        tf_nameseq_rev (dict): Reverse TF-name map.
+        families (dict): TF family mapping.
+        plot_step (int): Identity bin width.
+        fileroot (str): Output file prefix.
+        selected_score (int): Score index to extract.
+        normalize (bool): Whether to normalize values.
+        maximum (dict): Per-family maxima for normalization.
+        minimum (dict): Per-family minima for normalization.
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        None.
+    """
     for tf_enrich, scores in tf.items():
         tf_name,tf_id=tf_enrich
         tf_query=tf_name.upper() 
@@ -302,6 +492,25 @@ def create_seqboxplot_family_enrichment(tf,tf_nameseq,tf_nameseq_rev,families,pl
           fo.close()
 
 def create_seqboxplot_family(tf,tf_nameseq,tf_nameseq_rev,families,plot_step,fileroot,selected_score,normalize,maximum,minimum,verbose):
+    """
+    Write family-specific sequence-comparison score files by identity bins.
+
+    Args:
+        tf (dict): TF-pair to score tuple map.
+        tf_nameseq (dict): TF-name to sequence-name map.
+        tf_nameseq_rev (dict): Reverse TF-name map.
+        families (dict): TF family mapping.
+        plot_step (int): Identity bin width.
+        fileroot (str): Output file prefix.
+        selected_score (int): Score index to extract.
+        normalize (bool): Whether to normalize values.
+        maximum (dict): Per-family maxima for normalization.
+        minimum (dict): Per-family minima for normalization.
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        None.
+    """
     if selected_score > 3: selected_score=3
     for tf_pair, scores in tf.items():
         tf_query=tf_pair[0].upper()
@@ -322,6 +531,26 @@ def create_seqboxplot_family(tf,tf_nameseq,tf_nameseq_rev,families,plot_step,fil
                 fo.close()
 
 def create_mdlboxplot_family(tf,tf_nameseq,tf_nameseq_rev,families,found_interval,plot_step,fileroot,selected_score,normalize,maximum,minimum,verbose):
+    """
+    Write family-specific model-comparison score files by identity bins.
+
+    Args:
+        tf (dict): TF-model to score tuple map.
+        tf_nameseq (dict): TF-name to sequence-name map.
+        tf_nameseq_rev (dict): Reverse TF-name map.
+        families (dict): TF family mapping.
+        found_interval (dict): Interval-to-TF set from sequence pass.
+        plot_step (int): Identity bin width.
+        fileroot (str): Output file prefix.
+        selected_score (int): Score index to extract.
+        normalize (bool): Whether to normalize values.
+        maximum (dict): Per-family maxima for normalization.
+        minimum (dict): Per-family minima for normalization.
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        None.
+    """
     for tf_pair, scores in tf.items():
         tf_query=tf_pair[0].upper()
         tf_query_use=get_tf_family(tf_query,tf_nameseq,tf_nameseq_rev)
@@ -340,6 +569,20 @@ def create_mdlboxplot_family(tf,tf_nameseq,tf_nameseq_rev,families,found_interva
                fo.close()
 
 def modelExist(tf_name_query,tf_nameseq,tf_nameseq_rev,tf_has_motif,tf_has_model,verbose):
+      """
+      Check whether a TF has at least one available modeled motif.
+
+      Args:
+          tf_name_query (str): Query TF name.
+          tf_nameseq (dict): TF-name to sequence-name map.
+          tf_nameseq_rev (dict): Reverse TF-name map.
+          tf_has_motif (dict): TF-to-motif map.
+          tf_has_model (dict): TF-to-model map.
+          verbose (bool): Verbose logging flag.
+
+      Returns:
+          bool: ``True`` when a model exists for the TF.
+      """
       if tf_name_query not in tf_has_model:
         if  tf_name_query in tf_nameseq:
           tf_dummy=tf_nameseq.get(tf_name_query)
@@ -356,6 +599,27 @@ def modelExist(tf_name_query,tf_nameseq,tf_nameseq_rev,tf_has_motif,tf_has_model
         return True
 
 def create_tf_models(omdltab,omdltmt,pwm_db,tf_families,tf_families_cisbp,tf_name_query,tf_nameseq,tf_nameseq_rev,tf_has_motif,tf_has_model,models_dir,verbose,tmp):
+      """
+      Compare query TF models against motif DB and export TOMTOM scores.
+
+      Args:
+          omdltab (str): Output comparison table path.
+          omdltmt (str): Output pickle path with TOMTOM objects.
+          pwm_db (str): PWM database path.
+          tf_families (dict): TF-to-family names map.
+          tf_families_cisbp (dict): TF-to-CisBP family map.
+          tf_name_query (str): Query TF name.
+          tf_nameseq (dict): TF-name to sequence-name map.
+          tf_nameseq_rev (dict): Reverse TF-name map.
+          tf_has_motif (dict): TF-to-motif map.
+          tf_has_model (dict): TF-to-model map.
+          models_dir (str): Directory of modeled motifs.
+          verbose (bool): Verbose logging flag.
+          tmp (str): Temporary directory.
+
+      Returns:
+          tuple[dict, dict]: Model scores and TOMTOM object map.
+      """
       tf_models={}
       tf_mdl_tomtom={}
       if tf_name_query not in tf_has_model:
@@ -414,6 +678,15 @@ def create_tf_models(omdltab,omdltmt,pwm_db,tf_families,tf_families_cisbp,tf_nam
       return (tf_models,tf_mdl_tomtom)
 
 def create_average_models(tf_models):
+    """
+    Aggregate TF model scores using average, maximum, and minimum strategies.
+
+    Args:
+        tf_models (dict): TF-model to score tuple map.
+
+    Returns:
+        tuple[dict, dict, dict]: Average, maximum, and minimum model-score maps.
+    """
     tf_list_mdl_scores={}
     tf_average_models={}
     tf_maxim_models={}
@@ -447,6 +720,26 @@ def create_average_models(tf_models):
     return (tf_average_models,tf_maxim_models,tf_minim_models)
 
 def create_tf_comparisons(outable,dmdltmt,pwm_out,pwm_db,tf_neighbours,tf_nameseq,tf_nameseq_rev,tf_has_motif,tf_families,tf_families_cisbp,verbose,tmp):
+     """
+     Build TF-vs-neighbour TOMTOM comparison table.
+
+     Args:
+         outable (str): Output comparison table path.
+         dmdltmt (str): Directory for TOMTOM pickles.
+         pwm_out (str): Directory with query PWM files.
+         pwm_db (str): Target PWM database.
+         tf_neighbours (dict): TF-to-neighbour tuples map.
+         tf_nameseq (dict): TF-name to sequence-name map.
+         tf_nameseq_rev (dict): Reverse TF-name map.
+         tf_has_motif (dict): TF-to-motif map.
+         tf_families (dict): TF-to-family names map.
+         tf_families_cisbp (dict): TF-to-CisBP family map.
+         verbose (bool): Verbose logging flag.
+         tmp (str): Temporary directory.
+
+     Returns:
+         dict: TF-pair to score tuple map.
+     """
      if verbose:sys.stdout.write("Create table of comparisons %s \n"%outable)
      outab=open(outable,"w")
      outab.write("#%14s\t%15s\t%15s\t%15s\t%10s\t%10s\t%10s\t%10s\t%10s\t%10s\t%10s\t%10s\t%10s\t%10s\t%10s\n"%("tf_query", "tf_target","motif_query","motif_target","%id","BLAST_e_val","p_value","e_value","q_value","p_score","e_score","q_score","Ranking","Family","CisBP_Fam"))
@@ -514,6 +807,17 @@ def create_tf_comparisons(outable,dmdltmt,pwm_out,pwm_db,tf_neighbours,tf_namese
      return tf_compare
 
 def get_tf_family(tf_query,tf_nameseq,tf_nameseq_rev):
+      """
+      Resolve canonical family lookup name for a TF identifier.
+
+      Args:
+          tf_query (str): Query TF name.
+          tf_nameseq (dict): TF-name to sequence-name map.
+          tf_nameseq_rev (dict): Reverse TF-name map.
+
+      Returns:
+          str: Canonical TF/family lookup key.
+      """
       tf_query_use=tf_query
       if  tf_query in tf_nameseq:
               tf_dummy=tf_nameseq.get(tf_query)
@@ -522,6 +826,21 @@ def get_tf_family(tf_query,tf_nameseq,tf_nameseq_rev):
       return tf_query_use 
        
 def calculate_maxmin(tf_compare,tf_models,tf_nameseq,tf_nameseq_rev,tf_families,set_of_families,selected_score):
+      """
+      Compute per-family/global min-max score ranges for normalization.
+
+      Args:
+          tf_compare (dict): TF-pair comparison score map.
+          tf_models (dict): TF-model score map.
+          tf_nameseq (dict): TF-name to sequence-name map.
+          tf_nameseq_rev (dict): Reverse TF-name map.
+          tf_families (dict): TF-to-family names map.
+          set_of_families (set): Families to process.
+          selected_score (int): Score index used for normalization.
+
+      Returns:
+          tuple[dict, dict, dict, dict]: Max/min for sequence and model scores.
+      """
 
       #if selected_score >3: 
       #    selected_score_seq = 3
@@ -578,6 +897,20 @@ def calculate_maxmin(tf_compare,tf_models,tf_nameseq,tf_nameseq_rev,tf_families,
 
 
 def calculate_enrichment_neighbours(outable,top,normalize,plot_step,number_of_motifs,verbose):
+    """
+    Compute enrichment metrics from neighbour comparison outputs.
+
+    Args:
+        outable (str): Input comparison table path.
+        top (int): Top-rank threshold.
+        normalize (bool): Reserved flag.
+        plot_step (int): Identity bin width.
+        number_of_motifs (int): Total motifs in database.
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        dict: Enrichment scores keyed by ``(tf_name, interval)``.
+    """
 
     rank_target={}
     set_targets={}
@@ -663,6 +996,22 @@ def calculate_enrichment_neighbours(outable,top,normalize,plot_step,number_of_mo
     
  
 def calculate_enrichment(tf_models,tf_mdl_tomtom,tf_has_motif,tf_nameseq,top,normalize,number_of_motifs,verbose):
+    """
+    Compute enrichment metrics from per-model TOMTOM outputs.
+
+    Args:
+        tf_models (dict): TF-model score map.
+        tf_mdl_tomtom (dict): TF-model TOMTOM map.
+        tf_has_motif (dict): TF-to-motif map.
+        tf_nameseq (dict): TF-name to sequence-name map.
+        top (int): Top-rank threshold.
+        normalize (bool): Reserved flag.
+        number_of_motifs (int): Total motifs in database.
+        verbose (bool): Verbose logging flag.
+
+    Returns:
+        dict: Enrichment scores keyed by ``(tf_name, "enrichment")``.
+    """
 
     toprank = int(top)
 
@@ -750,6 +1099,18 @@ def calculate_enrichment(tf_models,tf_mdl_tomtom,tf_has_motif,tf_nameseq,top,nor
     return tf_enrichment
 
 def log_p_value(m,e,n,x):
+    """
+    Compute log p-value approximation for enrichment statistics.
+
+    Args:
+        m (int): Number of models.
+        e (float): Enrichment ratio in [0, 1].
+        n (int): Number of motifs.
+        x (int): Top-rank threshold.
+
+    Returns:
+        float | None: Log p-value estimate.
+    """
     y=None
     k=(int)(m*e)
     if x<n and k<=m:
@@ -759,6 +1120,15 @@ def log_p_value(m,e,n,x):
     return y
 
 def log_factorial(n):
+    """
+    Compute log-factorial by summation.
+
+    Args:
+        n (int): Non-negative integer.
+
+    Returns:
+        float: ``log(n!)``.
+    """
     x=0
     if n>0:
        for i in range(1,int(n+1)): 
@@ -766,6 +1136,16 @@ def log_factorial(n):
     return x
 
 def log_combinatorial(n,m):
+    """
+    Compute log binomial coefficient ``C(n,m)``.
+
+    Args:
+        n (int): Population size.
+        m (int): Chosen elements.
+
+    Returns:
+        float: ``log(C(n,m))``.
+    """
     x=0
     if n>m:
        x =  log_factorial(n) - log_factorial(m) - log_factorial(n-m)
@@ -773,6 +1153,17 @@ def log_combinatorial(n,m):
 
 
 def best_enrichment(m,n,x):
+    """
+    Estimate minimum enrichment and most probable enrichment thresholds.
+
+    Args:
+        m (int): Number of observations.
+        n (int): Number of motifs.
+        x (int): Top-rank threshold.
+
+    Returns:
+        tuple[int, int]: Minimum enrichment and max-probability enrichment.
+    """
     max_LogpValue= -np.log(float(n))
     y = 1
     z = 1
@@ -791,6 +1182,19 @@ def best_enrichment(m,n,x):
     return (y,z)
 
 def boxplot(input_name,boxplot_name,title,output_name,verbose):
+ """
+ Render grouped boxplots and export pairwise statistical test summaries.
+
+ Args:
+     input_name (str): File listing box labels and data files.
+     boxplot_name (str): Output image path.
+     title (str): Plot title.
+     output_name (str): Output statistics text file.
+     verbose (bool): Verbose logging flag.
+
+ Returns:
+     None.
+ """
  from matplotlib.patches import Polygon
  if fileExist(input_name):
   dataname=[]
@@ -909,6 +1313,9 @@ def boxplot(input_name,boxplot_name,title,output_name,verbose):
 #-------------#
 
 def main():
+    """
+    Run nearest-neighbour TF/motif comparison, enrichment, and plotting pipeline.
+    """
 
     # Arguments & Options #
     options = parse_options()

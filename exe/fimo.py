@@ -1,3 +1,11 @@
+"""
+Run MEME/FIMO motif scanning and expose the results through small helper classes.
+
+This module provides a lightweight wrapper around the FIMO command-line tool,
+plus in-memory containers for parsed FIMO hits that are reused by several
+scanning workflows in ModCRE.
+"""
+
 import os, sys, re
 import configparser
 import copy
@@ -41,17 +49,41 @@ from ModCRElib.structure.contacts import triads
 
 class Fimo(object):
     """
-    This class defines a {FIMO} object.
-    
+    Container for the parsed output of one FIMO execution.
+
+    The object stores the original text lines and exposes the detected motif
+    hits as :class:`FimoHit` instances.
+
+    Object features:
+        - Raw FIMO text output preserved line-by-line (`_file_content`).
+        - Parsed hit collection as `FimoHit` objects (`_hits`).
+        - Query/sequence identifier extracted from FIMO lines (`_query`).
+        - Parsing logic that supports alternative FIMO output layouts and
+          normalizes reverse-strand hits to complementary DNA sequence context.
+        - Accessors and filters for query metadata, hit presence checks, and
+          iteration over stored hits.
+        - Serialization helper to write the original FIMO output back to disk.
     """
 
     def __init__(self, file_content):
+        """
+        Create a parsed FIMO-result object.
+
+        Args:
+            file_content (list[str]): Lines of FIMO output.
+        """
         self._file_content = file_content
         self._hits = []
         # Initialize #
         self._parse_file()
 
     def _parse_file(self):
+        """
+        Parse the raw FIMO output lines into :class:`FimoHit` objects.
+
+        Returns:
+            None. Populates ``self._hits`` and ``self._query`` in place.
+        """
 
         #if config.get("Parameters", "fimo_pvalue_threshold") is not None:
         #   fimo_pvalue_threshold=float(config.get("Parameters", "fimo_pvalue_threshold"))
@@ -90,9 +122,19 @@ class Fimo(object):
              sys.stderr.write("WARNING FIMO: skip %s\n"%(linefile))
 
     def get_query(self):
+        """Return the query/sequence identifier associated with the FIMO run."""
         return self._query
 
     def has_hit(self, hit_name):
+        """
+        Check whether a motif hit with the given name is present.
+
+        Args:
+            hit_name (str): Motif identifier.
+
+        Returns:
+            bool: True if at least one hit matches ``hit_name``.
+        """
         for hit_obj in self._hits:
             if hit_name == hit_obj.get_hit():
                 return True
@@ -100,12 +142,30 @@ class Fimo(object):
         return False
 
     def get_hits(self, sort=False):
+        """
+        Return the list of FIMO hits.
+
+        Args:
+            sort (bool): If True, sort hits by ascending p-value.
+
+        Returns:
+            list[FimoHit]: Parsed motif hits.
+        """
         if sort:
             return sorted(self._hits, key=lambda x: x.get_p_value())
 
         return self._hits
 
     def get_hit(self, hit_name):
+        """
+        Return the first hit with the given motif name.
+
+        Args:
+            hit_name (str): Motif identifier.
+
+        Returns:
+            FimoHit | None: Matching hit or ``None`` if absent.
+        """
         if self.has_hit(hit_name):
             for hit_obj in self._hits:
                 if hit_name == hit_obj.get_hit():
@@ -114,16 +174,45 @@ class Fimo(object):
         return None
 
     def write(self, file_name):
+        """
+        Write the raw FIMO output back to disk.
+
+        Args:
+            file_name (str): Output path.
+        """
         for line in self._file_content:
             functions.write(file_name, line)
 
 class FimoHit(object):
     """
-    This class defines a {FimoHit} object.
-    
+    Representation of one FIMO motif match on a DNA sequence.
+
+    Object features:
+        - Motif identifier reported by FIMO (`_hit`).
+        - Match interval on the scanned sequence (`_start`, `_end`), using
+          FIMO's coordinate convention from the parsed output.
+        - Match orientation (`_strand`), typically `+` or `-`.
+        - Match significance/intensity metrics (`_score`, `_p_value`).
+        - Matched sequence string (`_sequence`); for reverse-strand hits this
+          is already normalized by the parser to the complementary sequence
+          context used by this codebase.
+        - Lightweight accessor methods used by profile/scoring workflows to
+          build per-position binding and score tracks.
     """
 
     def __init__(self, hit, start, end, strand, score, p_value, sequence):
+        """
+        Create one FIMO hit record.
+
+        Args:
+            hit (str): Motif identifier.
+            start (int): Match start position.
+            end (int): Match end position.
+            strand (str): Match strand, usually ``+`` or ``-``.
+            score (float): FIMO score.
+            p_value (float): FIMO p-value.
+            sequence (str): Matched DNA sequence.
+        """
         self._hit = hit
         self._start = start
         self._end = end
@@ -133,24 +222,31 @@ class FimoHit(object):
         self._sequence = sequence
         
     def get_hit(self):
+            """Return the motif identifier for this hit."""
             return self._hit
 
     def get_start(self):
+            """Return the start coordinate of this hit."""
             return self._start
 
     def get_strand(self):
+            """Return the strand of this hit."""
             return self._strand
 
     def get_end(self):
+            """Return the end coordinate of this hit."""
             return self._end
 
     def get_score(self):
+            """Return the FIMO score for this hit."""
             return self._score
 
     def get_p_value(self):
+            """Return the FIMO p-value for this hit."""
             return self._p_value
 
     def get_sequence(self):
+            """Return the matched DNA sequence for this hit."""
             return self._sequence
 
 #-------------#
@@ -159,9 +255,26 @@ class FimoHit(object):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse the command line options for running FIMO.
 
+    How to run:
+        python fimo.py -d DATABASE_MEME -i INPUT_FASTA
+            [--dummy DUMMY_DIR --ft P_VALUE --max MAX_MATCHES -o OUTPUT_FILE]
+
+    Example:
+        python fimo.py -d motifs.meme -i dna.fa --ft 1e-4 -o fimo_hits.txt
+
+    The parser configures:
+        - Motif database and FASTA input required by FIMO.
+        - Optional p-value and match-cap controls.
+        - Temporary/output path configuration.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options describing the motif database,
+        input FASTA file, thresholds, and output path.
     """
 
     parser = optparse.OptionParser("python fimo.py -d database_file -i input_file [--dummy=dummy_dir -o output_file]")
@@ -182,16 +295,20 @@ def parse_options():
 
 def get_fimo_obj(database_file, fasta_file,fimo_pvalue_threshold=None, max_stored_matches=None, dummy_dir="/tmp"):
     """
-    This function executes "fimo" from MEME package and returns a {FIMO}.
+    Execute FIMO and return the parsed results.
 
-    @input:
-    database_file {filename}
-    fasta_file {filename}
-    dummy_dir {directory}
+    Args:
+        database_file (str): MEME-format motif database.
+        fasta_file (str): FASTA file to scan.
+        fimo_pvalue_threshold (float | None): Optional p-value threshold.
+        max_stored_matches (int | None): Optional FIMO storage cap.
+        dummy_dir (str): Temporary directory used for FIMO output.
 
-    @return:
-    fimo_obj {FIMO}
+    Returns:
+        Fimo: Parsed FIMO result object.
 
+    Raises:
+        ValueError: If FIMO execution fails.
     """
 
     try:
@@ -247,12 +364,21 @@ def get_fimo_obj(database_file, fasta_file,fimo_pvalue_threshold=None, max_store
     except:
         raise ValueError("Could not exec FIMO for %s" % fasta_file)
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line FIMO wrapper.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options and resolve absolute paths.
+        2. Execute FIMO and parse the resulting motif hits.
+        3. Write parsed output to file or standard output.
 
+    Args:
+        None.
+
+    Returns:
+        None. Writes raw FIMO output to a file or stdout.
+    """
     # Arguments & Options #
     options = parse_options()
 
@@ -279,3 +405,10 @@ if __name__ == "__main__":
         for line in fimo_obj._file_content:
             sys.stdout.write("%s\n" % line)
 
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()

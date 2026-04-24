@@ -1,3 +1,11 @@
+"""
+DNA-to-protein (ModCRE) pipeline: PWM database assembly, scanning, and modeling hooks.
+
+Builds or selects a PWM database (JASPAR, Cis-BP, custom, or default PBM), runs
+``scanner.py`` on regulatory DNA, normalizes hits into cluster JSON for the web,
+optionally invokes network context (``create_network.py``), and supports downstream
+``get_models`` / integrative modeling entry points used from ``modcre`` or CLI.
+"""
 import os, sys, re
 import configparser
 import json
@@ -78,6 +86,15 @@ root_path = config.get("Paths", "root_path")
 #-------------#
 
 def get_specie_code(specie):
+    """
+    Map a species display name to its short code from the configured species list.
+
+    Args:
+        specie (str or None): Species string, or ``\"null\"`` / ``None`` for unknown.
+
+    Returns:
+        str or None: Species code if a matching line is found; otherwise ``None``.
+    """
 
     if (specie == "null") or (specie == None) :
         return None 
@@ -93,9 +110,28 @@ def get_specie_code(specie):
                 if len(fields)<3: continue
                 specie_code = fields[2].replace(":", "")
                 return specie_code
+    return None
 
 
 def get_userdb(folder,fasta_file,mdl2fasta,uid_set,uid_db,label=None):
+    """
+    Build a custom PWM + protein BLAST database for user-supplied UniProt IDs.
+
+    Creates ``pwms_DB``, ``results``, and ``homologs`` subfolders, concatenates
+    MEME PWMs, writes ``userdb2pdb.txt`` associations, and runs ``makeblastdb`` on
+    the sequence set followed by per-template BLAST compact outputs.
+
+    Args:
+        folder (str): Job PWM workspace (contains ``*.meme`` files).
+        fasta_file (str): Path to the master FASTA used as the BLAST subject DB.
+        mdl2fasta (dict): Mapping between model names and FASTA accessions.
+        uid_set (set): UniProt (or similar) ids selected for labeling.
+        uid_db (str): Path to custom PWM database fragment to prepend.
+        label (str, optional): Prefix for non-UID sequences in the DB (default ``\"model\"``).
+
+    Returns:
+        tuple: ``(database_pwm_path, association_file_path, homologs_dir_path)``.
+    """
 
     #Initialize
     #print(folder,fasta_file,mdl2fasta,uid_set,uid_db,label)
@@ -204,6 +240,21 @@ def get_userdb(folder,fasta_file,mdl2fasta,uid_set,uid_db,label=None):
 
 
 def get_pwm_database(json_dict, output_dir, dummy_dir, remote=True):
+    """
+    Assemble the PWM scanning database (JASPAR, Cis-BP, custom, or default PBM).
+
+    Args:
+        json_dict (dict): Experiment options including species and PWM DB flags.
+        output_dir (str): Job directory; receives ``pwm_database/`` subtree.
+        dummy_dir (str): Scratch directory for subprocesses.
+        remote (bool): If True, offload heavy modeling steps via
+            ``functions.execute_in_remote``.
+
+    Returns:
+        tuple: ``(json_dict, database_bool, database_dir, database_file,
+        association_file, homologs_dir, error_msg)`` where ``error_msg`` is set
+        on failure paths.
+    """
 
     print("Construction of the PWM database")
     if not os.path.exists(os.path.join(output_dir, "pwm_database")): 
@@ -495,6 +546,24 @@ def get_pwm_database(json_dict, output_dir, dummy_dir, remote=True):
 
 
 def run_scan(json_dict, output_dir, database_external, database_dir, database_file, association_file, homologs_dir , scan_dir,  dummy_dir, remote=True):
+    """
+    Run ``scanner.py`` on input DNA with the selected PWM / ortholog configuration.
+
+    Args:
+        json_dict (dict): Experiment state (input FASTA path, species, FIMO cutoff, ...).
+        output_dir (str): Job root directory.
+        database_external (bool): Whether a non-default external PWM DB is active.
+        database_dir (str): Directory holding per-motif MEME files (or None).
+        database_file (str): Concatenated MEME database path (or None).
+        association_file (str): PWM-to-PDB mapping file from JASPAR/Cis-BP/custom.
+        homologs_dir (str or None): Homolog cache directory for external DB mode.
+        scan_dir (str): Target scan output folder (overwritten to ``output_dir/scan``).
+        dummy_dir (str): Scratch directory for scanner.
+        remote (bool): Cluster offload flag.
+
+    Returns:
+        dict: Updated ``json_dict`` with ortholog JSON paths or ``error_msg``.
+    """
 
     input_file = os.path.join(output_dir, json_dict["input"]["file"])
     scan_dir   = os.path.join(output_dir,"scan")
@@ -577,6 +646,15 @@ def run_scan(json_dict, output_dir, database_external, database_dir, database_fi
 
 
 def get_protein_name(uniprot_id):
+    """
+    Fetch the UniProt ``DE`` full protein name from the flat-file REST endpoint.
+
+    Args:
+        uniprot_id (str): UniProt accession.
+
+    Returns:
+        str: Protein name, or ``\"Not found\"`` if parsing fails.
+    """
 
     print((str(uniprot_id)))
     prot_name = "Not found"
@@ -598,6 +676,18 @@ def get_protein_name(uniprot_id):
 
 
 def process_scan_outputs(json_dict,  output_dir, dummy_dir):
+    """
+    Normalize scanner outputs into cluster dicts for the ModCRE web JSON payload.
+
+    Args:
+        json_dict (dict): In-progress experiment dictionary.
+        output_dir (str): Job directory containing ``scan/``.
+        dummy_dir (str): Unused scratch path (kept for API compatibility).
+
+    Returns:
+        dict: ``full_json_dict`` including ``clusters`` with plotting vectors and
+        ortholog metadata; may set ``error_msg`` if no binding sites are found.
+    """
 
     # Check if all orthologs are requested, then ranking is unnecessary
     rank=True
@@ -693,6 +783,20 @@ def process_scan_outputs(json_dict,  output_dir, dummy_dir):
     return full_json_dict
     
 def build_dna_structure(dna_seq, dna_str, output_dir,  begining=None, ending=None, verbose=False):
+    """
+    Build a 3D DNA PDB fragment with X3DNA ``fiber`` or nucleosomal remodeling.
+
+    Args:
+        dna_seq (str): Full DNA sequence for the job (may be windowed).
+        dna_str (str): Conformation key (``B``, ``A``, ``C``, ``D``, ``Z``, ``B_bent``, ...).
+        output_dir (str): Directory for PDB and mutation sidecar files.
+        begining (int, optional): 1-based inclusive start in ``dna_seq`` (window mode).
+        ending (int, optional): 1-based inclusive end in ``dna_seq`` (window mode).
+        verbose (bool): Echo X3DNA commands for some modes.
+
+    Returns:
+        str: Path to the written DNA PDB file.
+    """
 
     src_path   = config.get("Paths", "src_path") 
     x3dna_path = os.path.join(src_path,config.get("Paths", "x3dna_path"))
@@ -791,6 +895,24 @@ def build_dna_structure(dna_seq, dna_str, output_dir,  begining=None, ending=Non
 
 
 def get_models(json_dict,job_dir,verbose=True,remote=True):
+    """
+    Build TF–DNA and optional PPI models for DNA2protein follow-up modeling.
+
+    Reads ``edges2model``, runs ``model_multiple_proteins.py`` on threading files,
+    generates overlapping DNA fragments, optionally ``complexbuilder.py`` /
+    ``optimize_complex.py``, ``execute_modpin.py`` for PPIs, packs archives, and
+    may launch IMP integrative modeling when ``combined_models`` is true.
+
+    Args:
+        json_dict (dict): Experiment dictionary after scanning (clusters, DNA, options).
+        job_dir (str): Absolute path to the job folder (basename = job id).
+        verbose (bool): Log major steps.
+        remote (bool): Use remote execution helpers where applicable.
+
+    Returns:
+        dict: Updated ``json_dict`` with ``tar_file_models`` / ``tar_file_complex``
+        paths or ``error_msg`` on failure.
+    """
 
 
     job_id     = os.path.basename(job_dir)
@@ -1137,6 +1259,20 @@ def get_models(json_dict,job_dir,verbose=True,remote=True):
 
 
 def handle_networks(full_json_dict, output_dir, dummy_dir,remote=False):
+    """
+    Run ``create_network.py`` to attach cofactor / PPI context to binding-site hits.
+
+    Args:
+        full_json_dict (dict): Scan results including ``clusters`` and ``cofactors``.
+        output_dir (str): Job directory for logs.
+        dummy_dir (str): Location for intermediate network IO files.
+        remote (bool): If True, submit ``create_network.py`` remotely.
+
+    Returns:
+        dict: ``network_data`` JSON object, or sets ``error_msg`` on remote failure
+        (note: on remote error the function references ``json_dict`` in the original
+        code; callers should validate keys).
+    """
 
     # Create input file for create_network.py #
     
@@ -1203,17 +1339,37 @@ def handle_networks(full_json_dict, output_dir, dummy_dir,remote=False):
 #---------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse CLI options for standalone DNA-to-protein (ModCRE) batch execution.
 
-    parser = optparse.OptionParser("Usage: modcre.py [--dummy=DUMMY_DIR] -j JSON_FILE [-o OUTPUT_DIR -v]")
+    How to run:
+        python md2p.py [--dummy DUMMY_DIR] -j JOB.json [-o OUTPUT_DIR] [-m] [-r] [-v]
 
+    Example:
+        python md2p.py -j dna2protein_input.json -o ./job_out -v
+
+    The parser configures:
+        Paths to the serialized experiment JSON, output root, optional modeling-only
+        mode (``-m`` runs ``get_models``), remote cluster submission, and verbosity.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed options namespace.
+    """
+
+    parser = optparse.OptionParser(
+        "Usage: md2p.py [--dummy=DUMMY_DIR] -j JSON_FILE [-o OUTPUT_DIR] [-m] [-r] [-v]"
+    )
+
+    # Dummy directory for temporary files #
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="DUMMY_DIR")
-    parser.add_option("-j", "--json", action="store", type="string", dest="json_file", help="Json file (from jsonBuilder.py; default = None)", metavar="JSON_FILE")
+    # Experiment JSON (same schema as web ``*_full.json`` / fabric output) #
+    parser.add_option("-j", "--json", action="store", type="string", dest="json_file", help="Experiment JSON file describing DNA2protein or modeling restart", metavar="JSON_FILE")
     parser.add_option("-o", "--output-dir", default="./", action="store", type="string", dest="output_dir", help="Output directory (default = ./)", metavar="OUTPUT_DIR")
-    parser.add_option("-m", "--modeling", default=False, action="store_true", dest="modeling",help="Get the models selected (default=False)")
-    parser.add_option("-r", "--remote", default=False, action="store_true", dest="remote",help="Submit to remote cluster (default=False)")
+    parser.add_option("-m", "--modeling", default=False, action="store_true", dest="modeling",help="Run structure/modeling stage only (get_models) (default=False)")
+    parser.add_option("-r", "--remote", default=False, action="store_true", dest="remote",help="Submit heavy steps to remote cluster (default=False)")
     parser.add_option("-v", "--verbose", default=False, action="store_true", dest="verbose", help="Verbose mode (default = False)")
     
     (options, args) = parser.parse_args()
@@ -1228,6 +1384,21 @@ def parse_options():
 # DNA 2 protein #
 #---------------#
 def dna_2_protein(json_dict, output_dir, verbose=True, remote=True):
+    """
+    Execute the DNA-to-protein discovery pipeline for one ModCRE job folder.
+
+    Builds the PWM database, runs the scanner, post-processes clusters, and calls
+    ``handle_networks`` to append interaction context.
+
+    Args:
+        json_dict (dict): Experiment dictionary (DNA sequence, species, DB flags).
+        output_dir (str): Absolute job directory.
+        verbose (bool): Print diagnostic messages.
+        remote (bool): Offload scanner/modeling to cluster when True.
+
+    Returns:
+        dict: Enriched JSON dictionary ready to serialize as ``*_full.json``.
+    """
 
     print(("\n\n" + str(json_dict) + "\n\n"))
     #get data
@@ -1293,9 +1464,21 @@ def dna_2_protein(json_dict, output_dir, verbose=True, remote=True):
 # Main          #
 #---------------#
 
+def main():
+    """
+    CLI entry: run DNA-to-protein scanning or the modeling-only branch.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse options and load the experiment JSON.
+        2. Either call ``dna_2_protein`` (default) or ``get_models`` when ``-m``.
+        3. Write ``{output_basename}_full.json`` under the output directory.
 
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -1316,4 +1499,7 @@ if __name__ == "__main__":
         out.write(json.dumps(json_dict, separators=(',', ':'), indent=2))
         out.close()
 
+
+if __name__ == "__main__":
+    main()
 

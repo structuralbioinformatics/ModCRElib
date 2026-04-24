@@ -22,7 +22,6 @@ config.read(config_file)
 sbilib_path = config.get("Paths", "sbilib_path")
 
 
-#sbilib_path = "/projects/lab_boliva/baldo_data/ModCRE2/scripts"
 sys.path.append(sbilib_path)
 from SBILib.structure import PDB
 sourcedir = sys.argv[1]
@@ -30,7 +29,6 @@ destdir = sys.argv[2]
 
 models = [f for f in os.listdir(sourcedir) if f.endswith(".pdb")]
 
-#models = ["MODEL_sp_P35869_AHR_HUMAN:34:272_5nj8_A_1.pdb","MODEL_sp_P35869_AHR_HUMAN:34:272_5nj8_A_2.pdb"]
 
 
 for x in models:

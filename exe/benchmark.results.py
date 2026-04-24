@@ -42,9 +42,13 @@ from ModCRElib.structure.dna import x3dna
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for per-chain benchmark score extraction.
 
+    How to run:
+        ``python benchmark.results.py -c pdb_chain -o output -p potentials -t triads -x x3dna``
+
+    Returns:
+        optparse.Values: Namespace with chain identifier and required input files.
     """
 
     parser = optparse.OptionParser("python benchmark.results.py -c pdb_chain -o output_file -p potentials_file -t triads_file -x x3dna_file")

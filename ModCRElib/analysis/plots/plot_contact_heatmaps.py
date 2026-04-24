@@ -64,6 +64,20 @@ python = os.path.join(config.get("Paths", "python_path"), "python")
 
 
 def plot_contact_heatmap(frequencies, distances, label, output_dir, tope, detail):
+    """
+    Render contact-frequency heatmaps for amino-acid/dinucleotide environments.
+
+    Args:
+        frequencies (dict): Contact counts keyed by triad feature labels.
+        distances (list[float]): Distance bins used to build contacts.
+        label (str): Label used in output filenames.
+        output_dir (str): Destination folder for generated plots.
+        tope (int | None): Optional upper cap for color scaling.
+        detail (bool): Whether to generate per-AA/per-dinucleotide detail plots.
+
+    Returns:
+        None.
+    """
 
     # Get all possible ticks for amino acids and for dinucleotides #
     aa_ticks = []
@@ -218,6 +232,16 @@ def plot_contact_heatmap(frequencies, distances, label, output_dir, tope, detail
 
 
 def parse_triads_files(input_file, only_pdb=False):
+    """
+    Parse triad potentials and collapse frequencies into scalar totals.
+
+    Args:
+        input_file (str): Triads input file.
+        only_pdb (bool): Reserved compatibility flag (currently unused).
+
+    Returns:
+        dict: Feature-to-frequency mapping.
+    """
 
     
     f_dab, f_a_dab, f_a_dab_oa, f_a_b_dab, f_dab_oa_ob, f_a_b_dab_oa_ob = spotentials.get_frequencies(input_file, computation=True,approach=False)
@@ -231,9 +255,12 @@ def parse_triads_files(input_file, only_pdb=False):
 
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse CLI options for contact heatmap generation.
+
+    Returns:
+        optparse.Values: Namespace with input/output controls and plot settings.
+    """
 
     parser = optparse.OptionParser("tf_mutations_analyzer.py --input_tf= --mutation= --dummy= --pbm= --pdb=")
 

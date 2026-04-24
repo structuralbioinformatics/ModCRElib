@@ -103,6 +103,24 @@ class macro_complex(object):
 
    """
    def __init__(self,name,fragments=None,complex_files=None,PPI_distance=12):
+       """
+              Initialize a macro-complex container from fragment-level inputs.
+       
+              Args:
+                  name (str): Complex identifier.
+                  fragments (list, optional): DNA fragment tuples.
+                  complex_files (dict, optional): Fragment-to-(pdb, remarks) mapping.
+                  PPI_distance (float, optional): Distance cutoff for PP interfaces.
+       
+              Returns:
+                  None.
+       
+       Args:
+           name (Any): Name/label used for this object or output.
+           fragments (Any): Fragment identifier or fragment interval.
+           complex_files (Any): Value used by this routine.
+           PPI_distance (Any): Value used by this routine.
+       """
        self._id=name
        if fragments is not None: self._fragments = fragments
        else:                     self._fragments = []
@@ -136,79 +154,308 @@ class macro_complex(object):
 
 
    def initialize(self,fasta_file):
+       """
+              Initialize proteins, interfaces/restraints, and topology.
+       
+              Args:
+                  fasta_file (str): FASTA file with protein sequences.
+       
+              Returns:
+                  None.
+       
+       Args:
+           fasta_file (Any): Path to the input/output file.
+       """
        print("\t--Get protein chains")
        self.set_proteins_in_core(fasta_file)
        self.set_interfaces_and_restraints_in_core()
        self.set_topology_core()
 
    def copy_protein_chains(self,protein_chains):
+       """
+              Copy protein-chain identifiers into the instance.
+       
+              Args:
+                  protein_chains (list): Protein-chain identifier list.
+       
+              Returns:
+                  None.
+       
+       Args:
+           protein_chains (Any): Protein identifier, object, or protein-related data.
+       """
        self._protein_chains = protein_chains[:]
 
    def copy_protein_sequences(self,protein_sequences):
+       """
+              Copy protein sequences into the instance.
+       
+              Args:
+                  protein_sequences (list): Protein sequence list.
+       
+              Returns:
+                  None.
+       
+       Args:
+           protein_sequences (Any): Protein identifier, object, or protein-related data.
+       """
        self._protein_sequences = protein_sequences[:]
 
    def copy_restraints(self,restraints):
+       """
+              Copy pairwise restraints into the instance.
+       
+              Args:
+                  restraints (dict): Restraint mapping.
+       
+              Returns:
+                  None.
+       
+       Args:
+           restraints (Any): Restraint configuration or restraint collection.
+       """
        for k,p in restraints.items():
            self._restraints.setdefault(k,p)
 
    def copy_interfaces(self,interfaces):
+       """
+              Copy residue-interface mappings into the instance.
+       
+              Args:
+                  interfaces (dict): Interface mapping.
+       
+              Returns:
+                  None.
+       
+       Args:
+           interfaces (Any): Interface descriptor or interface-related data.
+       """
        for k,p in interfaces.items():
            q = set([x for x in p])
            self._interfaces.setdefault(k,q)
 
    def copy_chain_correspondence_in_core(self,chain_correspondence_in_core):
+       """
+              Copy chain-to-protein mapping for core complexes.
+       
+              Args:
+                  chain_correspondence_in_core (dict): Core correspondence mapping.
+       
+              Returns:
+                  None.
+       
+       Args:
+           chain_correspondence_in_core (Any): Value used by this routine."""
        for k,p in chain_correspondence_in_core.items():
            self._chain_correspondence_in_core.setdefault(k,p)
 
    def copy_chain_correspondence_plus(self,chain_correspondence_plus):
+       """
+              Copy chain-to-protein mapping for added structures.
+       
+              Args:
+                  chain_correspondence_plus (dict): Additional correspondence mapping.
+       
+              Returns:
+                  None.
+       
+       Args:
+           chain_correspondence_plus (Any): Value used by this routine."""
        for k,p in chain_correspondence_plus.items():
            self._chain_correspondence_plus.setdefault(k,p)
 
    def copy_topology(self,topology):
+       """
+              Copy topology-table fields into the instance.
+       
+              Args:
+                  topology (dict): Topology table dictionary.
+       
+              Returns:
+                  None.
+       
+       Args:
+           topology (Any): Value used by this routine."""
        for k,p in topology.items():
            q=p[:]
            self._topology.setdefault(k,q)
 
    def copy_fragments(self,fragments):
+       """
+              Copy DNA-fragment tuple definitions.
+       
+              Args:
+                  fragments (list): DNA fragment tuples.
+       
+              Returns:
+                  None.
+       
+       Args:
+           fragments (Any): Fragment identifier or fragment interval."""
        self._fragments = fragments[:]
    
    def copy_complexes(self,complexes):
+       """
+              Copy fragment-to-complex file associations.
+       
+              Args:
+                  complexes (dict): Fragment-to-complex mapping.
+       
+              Returns:
+                  None.
+       
+       Args:
+           complexes (Any): Value used by this routine."""
        for k,p in complexes.items():
            self._complexes.setdefault(k,p)
 
    def copy_protein_reference_site(self,protein_reference_site):
+       """
+              Copy reference DNA-site intervals per protein.
+       
+              Args:
+                  protein_reference_site (dict): Protein reference-site mapping.
+       
+              Returns:
+                  None.
+       
+       Args:
+           protein_reference_site (Any): Protein identifier, object, or protein-related data."""
        for k,p in protein_reference_site.items():
            q = set([x for x in p])
            self._protein_reference_site.setdefault(k,q)
   
    def set_protein_dsize(self,protein_dsize):
+       """
+              Set neighborhood size for protein inner restraints.
+       
+              Args:
+                  protein_dsize (int): Neighborhood size.
+       
+              Returns:
+                  None.
+       
+       Args:
+           protein_dsize (Any): Protein identifier, object, or protein-related data."""
        self._protein_dsize = protein_dsize
 
    def set_protein_sfactor(self,protein_sfactor):
+       """
+              Set decay factor for protein-distance restraints.
+       
+              Args:
+                  protein_sfactor (float): Decay factor.
+       
+              Returns:
+                  None.
+       
+       Args:
+           protein_sfactor (Any): Protein identifier, object, or protein-related data."""
        self._protein_sfactor = protein_sfactor
 
    def set_protein_threshold(self,protein_threshold):
+       """
+              Set threshold offset for protein restraint decay.
+       
+              Args:
+                  protein_threshold (int): Decay threshold.
+       
+              Returns:
+                  None.
+       
+       Args:
+           protein_threshold (Any): Protein identifier, object, or protein-related data."""
        self._protein_threshold = protein_threshold
 
    def set_protein_maxdist(self,protein_maxdist):
+       """
+              Set maximum CA-CA distance for inner restraints.
+       
+              Args:
+                  protein_maxdist (float): Distance cutoff.
+       
+              Returns:
+                  None.
+       
+       Args:
+           protein_maxdist (Any): Protein identifier, object, or protein-related data."""
        self._protein_maxdist =  protein_maxdist
 
    def set_domain_connection(self,domain_connection):
+       """
+              Set minimum linker allowance between disconnected domains.
+       
+              Args:
+                  domain_connection (int): Linker allowance parameter.
+       
+              Returns:
+                  None.
+       
+       Args:
+           domain_connection (Any): Value used by this routine."""
        self._domain_connection = domain_connection
 
    def set_interface_overlap(self,interface_overlap):
+       """
+              Set minimum overlap used when comparing interfaces.
+       
+              Args:
+                  interface_overlap (int): Interface-overlap threshold.
+       
+              Returns:
+                  None.
+       
+       Args:
+           interface_overlap (Any): Interface descriptor or interface-related data."""
        self._interface_overlap=interface_overlap
 
    def set_minimum_interface(self,minimum_interface):
+       """
+              Set minimum interface-size threshold for additions.
+       
+              Args:
+                  minimum_interface (int): Minimum interface size.
+       
+              Returns:
+                  None.
+       
+       Args:
+           minimum_interface (Any): Interface descriptor or interface-related data."""
        self._minimum_interface=minimum_interface
 
    def set_minimum_addition(self,minimum_addition):
+       """
+              Set minimum restraints required for a new addition.
+       
+              Args:
+                  minimum_addition (int): Minimum restraint count.
+       
+              Returns:
+                  None.
+       
+       Args:
+           minimum_addition (Any): Minimum limit used by the routine."""
        self._minimum_addition=minimum_addition
 
    def set_restrict_equal(self,restrict_equal):
+       """
+              Enable or disable strict equality checks between complexes.
+       
+              Args:
+                  restrict_equal (bool): Strict-equality policy.
+       
+              Returns:
+                  None.
+       
+       Args:
+           restrict_equal (Any): Value used by this routine."""
        self._restrict_equal=restrict_equal
 
    def set_proteins_in_core(self,fasta_file):
+       """Load proteins from core fragment remarks and FASTA sequences.
+       
+       Args:
+           fasta_file (Any): Path to the input/output file."""
        sequences={}
        for protein,sequence in parse_fasta_file(fasta_file,gz=False,clean=True):
           sequences.setdefault(protein,sequence)
@@ -236,6 +483,7 @@ class macro_complex(object):
 
     
    def set_interfaces_and_restraints_in_core(self):
+       """Derive core PPIs and initialize interface/restraint dictionaries."""
        #this method initializes the set of restraints
        for fragment in self._fragments:
            print(("\t--Get restraints PPI and TF-DNA in fragment "+str(fragment)))
@@ -272,6 +520,14 @@ class macro_complex(object):
                    self._restraints.setdefault(tuple( (pos_prot_1,pos_prot_2) ) ,(distance,1.0) )
 
    def set_protein_inner_restrains_in_core(self,protein,dsize=None,sfactor=None,threshold=None,maxdist=None):
+       """Add intra-protein distance restraints for one core-chain protein.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data.
+           dsize (Any): Value used by this routine.
+           sfactor (Any): Value used by this routine.
+           threshold (Any): Threshold value controlling filtering or acceptance.
+           maxdist (Any): Maximum limit used by the routine."""
        if dsize is None: dsize=self._protein_dsize
        if sfactor is None: sfactor=self._protein_sfactor
        if threshold is None: threshold=self._protein_threshold
@@ -314,6 +570,14 @@ class macro_complex(object):
                 done.append(tuple((pos_j,pos_i)))
 
    def extend_protein_inner_restrains(self,protein,dsize=None,sfactor=None,threshold=None,maxdist=None):
+       """Add intra-protein restraints using additionally loaded structures.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data.
+           dsize (Any): Value used by this routine.
+           sfactor (Any): Value used by this routine.
+           threshold (Any): Threshold value controlling filtering or acceptance.
+           maxdist (Any): Maximum limit used by the routine."""
        if dsize is None: dsize=self._protein_dsize
        if sfactor is None: sfactor=self._protein_sfactor
        if threshold is None: threshold=self._protein_threshold
@@ -359,6 +623,13 @@ class macro_complex(object):
 
 
    def set_all_inner_restraints_in_core(self,dsize=None,sfactor=None,threshold=None,maxdist=None):
+       """Add intra-protein restraints for all proteins in the core.
+       
+       Args:
+           dsize (Any): Value used by this routine.
+           sfactor (Any): Value used by this routine.
+           threshold (Any): Threshold value controlling filtering or acceptance.
+           maxdist (Any): Maximum limit used by the routine."""
        if dsize is None: dsize=self._protein_dsize
        if sfactor is None: sfactor=self._protein_sfactor
        if threshold is None: threshold=self._protein_threshold
@@ -367,6 +638,13 @@ class macro_complex(object):
            self.set_protein_inner_restrains_in_core(protein,dsize,sfactor,threshold,maxdist)
 
    def extend_all_inner_restraints(self,dsize=None,sfactor=None,threshold=None,maxdist=None):
+       """Extend intra-protein restraints for all currently tracked proteins.
+       
+       Args:
+           dsize (Any): Value used by this routine.
+           sfactor (Any): Value used by this routine.
+           threshold (Any): Threshold value controlling filtering or acceptance.
+           maxdist (Any): Maximum limit used by the routine."""
        if dsize is None: dsize=self._protein_dsize
        if sfactor is None: sfactor=self._protein_sfactor
        if threshold is None: threshold=self._protein_threshold
@@ -375,6 +653,7 @@ class macro_complex(object):
            self.extend_protein_inner_restrains(protein,dsize,sfactor,threshold,maxdist)
 
    def counter_restraints(self):
+       """Count restraints grouped by molecule-pair keys."""
        counter={}
        for pair,restr in self._restraints.items():
            pos_1,pos_2 = pair
@@ -387,6 +666,13 @@ class macro_complex(object):
        return counter
 
    def trim_restraints(self,ratio=0.2,minimum=50,threshold=50,interaction_type="ppi"):
+       """Subsample restraints while preserving a minimum per interaction pair.
+       
+       Args:
+           ratio (Any): Ratio parameter controlling scaling or trimming.
+           minimum (Any): Minimum limit used by the routine.
+           threshold (Any): Threshold value controlling filtering or acceptance.
+           interaction_type (Any): Value used by this routine."""
        new_restraints={}
        counter = self.counter_restraints()
        new_counter={}
@@ -428,87 +714,219 @@ class macro_complex(object):
        
 
    def set_name(self,name):
+       """Set complex identifier.
+       
+       Args:
+           name (Any): Name/label used for this object or output."""
        self._id = name
 
    def get_name(self):
+       """
+       Return complex identifier.
+
+       Args:
+           None.
+
+       Returns:
+           str: Complex identifier.
+       """
        return self._id
 
    def get_complexes(self):
+       """
+       Return fragment-to-complex dictionary.
+
+       Args:
+           None.
+
+       Returns:
+           dict: Fragment-to-complex mapping.
+       """
        return self._complexes
 
    def get_fragments(self):
+       """
+       Return DNA-fragment definitions.
+
+       Args:
+           None.
+
+       Returns:
+           list: Fragment tuples.
+       """
        return self._fragments
 
    def get_complexes(self):
+       """Return fragment-to-complex dictionary."""
        return self._complexes
 
    def get_protein_chains(self):
+       """
+       Return protein-chain labels.
+
+       Args:
+           None.
+
+       Returns:
+           list: Protein-chain labels.
+       """
        return self._protein_chains
 
    def get_protein_sequences(self):
+       """
+       Return protein sequences.
+
+       Args:
+           None.
+
+       Returns:
+           list: Protein sequence list.
+       """
        return self._protein_sequences
 
    def get_restraints(self):
+       """
+       Return restraint dictionary.
+
+       Args:
+           None.
+
+       Returns:
+           dict: Restraints mapping.
+       """
        return self._restraints
 
    def get_interfaces(self):
+       """
+       Return interface residue dictionary.
+
+       Args:
+           None.
+
+       Returns:
+           dict: Interface mapping.
+       """
        return self._interfaces
 
    def get_interface(self,protein):
+       """Return interface residues for one protein, if present.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data."""
        if protein in self._interfaces:
            return self._interfaces.get(protein)
        else:
            return None
 
    def get_chain_correspondence_in_core(self):
+       """
+       Return mapping between core fragment chains and proteins.
+
+       Args:
+           None.
+
+       Returns:
+           dict: Core chain/protein correspondence.
+       """
        return self._chain_correspondence_in_core
 
    def get_chain_correspondence_plus(self):
+       """
+       Return mapping between added-structure chains and proteins.
+
+       Args:
+           None.
+
+       Returns:
+           dict: Extended chain/protein correspondence.
+       """
        return self._chain_correspondence_plus
 
    def get_topology(self):
+       """
+       Return topology table dictionary.
+
+       Args:
+           None.
+
+       Returns:
+           dict: Topology table fields.
+       """
        return self._topology
 
    def get_protein_reference_site(self):
+       """
+       Return protein-to-reference-site mapping.
+
+       Args:
+           None.
+
+       Returns:
+           dict: Reference-site mapping by protein.
+       """
        return self._protein_reference_site
 
    def get_reference_site(self,protein):
+       """Return reference-site set for one protein.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data."""
        if protein not in self._protein_reference_site: return None
        return self._protein_reference_site[protein]
 
    def get_protein_dsize(self):
+       """Return protein inner-restraint neighborhood size."""
        return self._protein_dsize 
 
    def get_protein_sfactor(self):
+       """Return protein restraint decay factor."""
        return self._protein_sfactor 
 
    def get_protein_threshold(self):
+       """Return protein restraint decay threshold."""
        return self._protein_threshold 
 
    def get_protein_maxdist(self):
+       """Return maximum allowed protein inner-restraint distance."""
        return self._protein_maxdist
 
    def get_interface_overlap(self):
+       """Return interface overlap threshold."""
        return self._interface_overlap
 
    def get_minimum_interface(self):
+       """Return minimum interface size threshold."""
        return self._minimum_interface
 
    def get_minimum_addition(self):
+       """Return minimum-addition restraint threshold."""
        return self._minimum_addition
 
    def get_restrict_equal(self):
+       """Return strict-equality policy for complex comparisons."""
        return self._restrict_equal
 
    def get_pdb_by_fragment(self,fragment):
+       """Return PDB file path for a given fragment.
+       
+       Args:
+           fragment (Any): Fragment identifier or fragment interval."""
        if fragment in self._complexes: return self._complexes[fragment][0]
        else: return None
 
    def get_remarks_by_fragment(self,fragment):
+       """Return remarks file path for a given fragment.
+       
+       Args:
+           fragment (Any): Fragment identifier or fragment interval."""
        if fragment in self._complexes: return self._complexes[fragment][1]
        else: return None
 
    def get_pdb_and_chain_in_core(self,protein):
+       """Return core PDB path and chain id assigned to one protein.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data."""
        if protein not in self._protein_chains: return None
        if protein not in self._chain_correspondence_in_core: return None
        fragment,chain = self._chain_correspondence_in_core[protein]
@@ -516,6 +934,10 @@ class macro_complex(object):
        return (pdb_file,chain)
 
    def get_pdb_and_chain(self,protein):
+       """Return all known `(pdb_file, chain)` tuples for one protein.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data."""
        if protein not in self._protein_chains: return None
        pdb_chain=set()
        if protein in self._chain_correspondence_in_core:
@@ -527,10 +949,19 @@ class macro_complex(object):
        return pdb_chain
 
    def get_protein_by_fragment_and_chain(self,fragment,chain):
+       """Return protein label for a `(fragment, chain)` pair.
+       
+       Args:
+           fragment (Any): Fragment identifier or fragment interval.
+           chain (Any): Chain identifier."""
        if tuple((fragment,chain)) not in self._chain_correspondence_in_core:return None
        return self._chain_correspondence_in_core.get(tuple((fragment,chain)))
 
    def get_proteins_by_fragment(self,fragment):
+       """Return proteins present in a given fragment.
+       
+       Args:
+           fragment (Any): Fragment identifier or fragment interval."""
        proteins=[]
        for p in self._protein_chains:
            if p not in self._chain_correspondence_in_core: continue
@@ -539,6 +970,10 @@ class macro_complex(object):
        return proteins
 
    def get_pdbchains_by_fragment(self,fragment):
+       """Return chain ids present in a given fragment.
+       
+       Args:
+           fragment (Any): Fragment identifier or fragment interval."""
        chains=[]
        for p in self._protein_chains:
            if p not in self._chain_correspondence_in_core: continue
@@ -547,12 +982,22 @@ class macro_complex(object):
        return chains
 
    def get_protein_by_pdb_and_chain_in_core(self,pdb_file,chain):
+       """Return core protein label for a specific `pdb_file` and chain.
+       
+       Args:
+           pdb_file (Any): Path to the input/output file.
+           chain (Any): Chain identifier."""
        fragment_select = self.get_fragment_by_pdb_in_core(pdb_file)
        if fragment_select is None: return None
        if tuple((fragment_select,chain)) not in self._chain_correspondence_in_core: return None
        return self._chain_correspondence_in_core(tuple((fragment_select,chain)))
 
    def get_protein_by_pdb_and_chain(self,pdb_file,chain):
+       """Return protein label from core/extra mappings for a given chain.
+       
+       Args:
+           pdb_file (Any): Path to the input/output file.
+           chain (Any): Chain identifier."""
        fragment_select = self.get_fragment_by_pdb_in_core(pdb_file)
        if fragment_select is not None:
          if tuple((fragment_select,chain)) in self._chain_correspondence_in_core:
@@ -564,6 +1009,10 @@ class macro_complex(object):
            return self._chain_correspondence_plus.get(tuple((pdb_file,chain)))
 
    def get_fragment_by_pdb_in_core(self,pdb_file):
+       """Return fragment tuple associated with a core PDB file.
+       
+       Args:
+           pdb_file (Any): Path to the input/output file."""
        fragment_select=None
        for fragment in list(self._complexes.keys()):
            pdb,remark = self._complexes[fragment]
@@ -574,6 +1023,17 @@ class macro_complex(object):
        return fragment_select
 
    def copy(self,name):
+       """
+              Deep-copy current macro-complex metadata into a new object.
+       
+              Args:
+                  name (str): Identifier for the copied complex.
+       
+              Returns:
+                  macro_complex: Copied complex instance.
+       
+       Args:
+           name (Any): Name/label used for this object or output."""
        other = self.__class__(name)
        other.copy_fragments(self.get_fragments())
        other.copy_complexes(self.get_complexes())
@@ -596,10 +1056,35 @@ class macro_complex(object):
        return other
 
    def add_chain_correspondence_plus(self,protein,pdb,chain):
+       """
+              Register correspondence for one additionally loaded structure chain.
+       
+              Args:
+                  protein (str): Protein label.
+                  pdb (str): PDB file path or identifier.
+                  chain (str): Chain identifier.
+       
+              Returns:
+                  None.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data.
+           pdb (Any): PDB object or structure file input.
+           chain (Any): Chain identifier."""
        self._chain_correspondence_plus.setdefault(protein,set()).add(tuple([pdb,chain]))
        self._chain_correspondence_plus.setdefault(tuple([pdb,chain]),protein)
 
    def accept_addition(self,pdb_obj,protein_num,protein_chain,partner,partner_chain,restraints,condition):
+       """Validate whether a candidate protein addition satisfies constraints.
+       
+       Args:
+           pdb_obj (Any): PDB object or structure file input.
+           protein_num (Any): Protein identifier, object, or protein-related data.
+           protein_chain (Any): Chain identifier.
+           partner (Any): Value used by this routine.
+           partner_chain (Any): Chain identifier.
+           restraints (Any): Restraint configuration or restraint collection.
+           condition (Any): Boolean flag controlling routine behavior."""
        # Add the new protein
        add_ppi_restraints=True
        print(("\t\t--check topology of the potential new interaction "+protein_num+" "+partner))
@@ -766,6 +1251,17 @@ class macro_complex(object):
 
 
    def add_topology_and_connect(self,number_of_addition,protein_num,pdb_file,protein_chain,partner,partner_chain,restraints,condition=None):
+       """Append topology rows and connectivity for an accepted addition.
+       
+       Args:
+           number_of_addition (Any): Numeric identifier/index used by this routine.
+           protein_num (Any): Protein identifier, object, or protein-related data.
+           pdb_file (Any): Path to the input/output file.
+           protein_chain (Any): Chain identifier.
+           partner (Any): Value used by this routine.
+           partner_chain (Any): Chain identifier.
+           restraints (Any): Restraint configuration or restraint collection.
+           condition (Any): Boolean flag controlling routine behavior."""
        # Add the new protein
        add_ppi_restraints=True
        print(("\t\t\t--check topology for interaction "+protein_num+" "+partner))
@@ -1004,6 +1500,12 @@ class macro_complex(object):
 
 
    def add_restraints(self,new_restraints,new_protein,partner_in_complex):
+       """Merge a restraint set for a new protein and partner.
+       
+       Args:
+           new_restraints (Any): Restraint configuration or restraint collection.
+           new_protein (Any): Protein identifier, object, or protein-related data.
+           partner_in_complex (Any): Value used by this routine."""
        protein_1 = new_protein.split(":")[0]
        protein_2 = partner_in_complex.split(":")[0]
        for pair,restr in new_restraints.items():
@@ -1019,6 +1521,13 @@ class macro_complex(object):
            
             
    def add_interfaces(self,interface_1,interface_2,new_protein,partner_in_complex):
+       """Merge interface residue sets for a new protein and partner.
+       
+       Args:
+           interface_1 (Any): Interface descriptor or interface-related data.
+           interface_2 (Any): Interface descriptor or interface-related data.
+           new_protein (Any): Protein identifier, object, or protein-related data.
+           partner_in_complex (Any): Value used by this routine."""
        protein_1 = new_protein.split(":")[0]
        protein_2 = partner_in_complex.split(":")[0]
        for p,aas in interface_1.items():
@@ -1034,6 +1543,12 @@ class macro_complex(object):
     
 
    def add_protein(self,protein,sequence,partner_with_reference):
+       """Register a new protein and infer its reference-site assignment.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data.
+           sequence (Any): Sequence/alignment content used in this step.
+           partner_with_reference (Any): Value used by this routine."""
        number = len(self._protein_chains) + 1
        protein_num=protein+":"+str(number)
        self._protein_chains.append(protein_num)
@@ -1044,6 +1559,16 @@ class macro_complex(object):
        return protein_num
 
    def add_ppi(self,pdb_file,protein_1,protein_2,sequence_1,sequence_2,condition=None,maximum=None):
+       """Attempt to add a protein-protein interaction from a PDB template.
+       
+       Args:
+           pdb_file (Any): Path to the input/output file.
+           protein_1 (Any): Protein identifier, object, or protein-related data.
+           protein_2 (Any): Protein identifier, object, or protein-related data.
+           sequence_1 (Any): Sequence/alignment content used in this step.
+           sequence_2 (Any): Sequence/alignment content used in this step.
+           condition (Any): Boolean flag controlling routine behavior.
+           maximum (Any): Maximum limit used by the routine."""
        # Additional interactions will be colored green
        print(("\t   check addition of PPI "+os.path.basename(pdb_file)))
        protein_codes = set([x.split(":")[0] for x in self._protein_chains])
@@ -1344,6 +1869,24 @@ class macro_complex(object):
        return (done_complex,new_restraints)
 
    def restraints_to_csv(self,interaction_type="all",kd=20.0,weight=1.0,sd=1.0):
+       """
+              Convert restraints into CSV-style lists used by IMP inputs.
+       
+              Args:
+                  interaction_type (str, optional): Interaction filter (`all`, `ppi`,
+                      `pni`, `nni`).
+                  kd (float, optional): Spring-constant value to store.
+                  weight (float, optional): Restraint weight to store.
+                  sd (float, optional): Standard deviation to store.
+       
+              Returns:
+                  tuple: Parallel lists representing CSV columns.
+       
+       Args:
+           interaction_type (Any): Value used by this routine.
+           kd (Any): Value used by this routine.
+           weight (Any): Value used by this routine.
+           sd (Any): Value used by this routine."""
        data={}
        for key in self._restraints:
          posi,posj = key
@@ -1365,6 +1908,10 @@ class macro_complex(object):
        return table
 
    def contains(self,other):
+       """Return whether all restraints of `other` are present in `self`.
+       
+       Args:
+           other (Any): Value used by this routine."""
        proteins_a = set([protein.split(":")[0] for protein in self.get_protein_chains()])
        proteins_b = set([protein.split(":")[0] for protein in other.get_protein_chains()])
        # chek all proteins in 'other' are in 'self'
@@ -1429,52 +1976,98 @@ class macro_complex(object):
        return False
 
    def __hash__(self):
+       """Return hash based on sorted restraint keys."""
        return self._id.__hash__()
                    
    def __eq__(self,other):
+       """Compare complexes by their restraint-key sets.
+       
+       Args:
+           other (Any): Value used by this routine."""
        return self.contains(other) and other.contains(self)
 
    def __lt__(self,other):
+       """Order complexes by number of restraints (ascending).
+       
+       Args:
+           other (Any): Value used by this routine."""
        return len(self._protein_chains) < len(other._protein_chains)
        
    def __gt__(self,other):
+       """Order complexes by number of restraints (descending).
+       
+       Args:
+           other (Any): Value used by this routine."""
        return len(self._protein_chains) > len(other._protein_chains)
        
    def __cmp__(self,other):
-      if   self == other: return 0
-      elif self < other:  return -1
-      else:               return 1
+       """Legacy comparison using number of restraints.
+       
+       Args:
+           other (Any): Value used by this routine."""
+       if   self == other: return 0
+       elif self < other:  return -1
+       else:               return 1
       
    def write_restraints(self,output,interaction_type="all",kd=20.0,weight=1.0,sd=1.0):
-      if os.path.exists(output) and os.path.isfile(output):
-       fo=open(output,"a")
-      else:
-       fo=open(output,"w")
-       fo.write("prot1,prot1_res,prot2,prot2_res,distance,kd,weight,sd\n")
-      for key in self._restraints:
-        posi,posj = key
-        dist,ratio= self._restraints[key]
-        name_1,res_1=posi
-        name_2,res_2=posj
-        if name_1 in self._protein_chains: mtype_1="prot"
-        if name_2 in self._protein_chains: mtype_2="prot"
-        if interaction_type == mtype_1+mtype_2 or interaction_type == mtype_2+mtype_1 or interaction_type=="all":
-           fo.write("%s,%s,%s,%s,%10.3f,%10.3f,%10.3f,%10.3f\n"%(name_1,res_1,name_2,res_2,float(dist),float(ratio)*kd,weight,sd))
-      fo.close()
+       """
+              Write selected restraints to a CSV file.
+       
+              Args:
+                  output (str): Output CSV file path.
+                  interaction_type (str, optional): Interaction filter.
+                  kd (float, optional): Spring-constant value.
+                  weight (float, optional): Restraint weight.
+                  sd (float, optional): Standard deviation.
+       
+              Returns:
+                  None.
+       
+       Args:
+           output (Any): Value used by this routine.
+           interaction_type (Any): Value used by this routine.
+           kd (Any): Value used by this routine.
+           weight (Any): Value used by this routine.
+           sd (Any): Value used by this routine."""
+       if os.path.exists(output) and os.path.isfile(output):
+        fo=open(output,"a")
+       else:
+        fo=open(output,"w")
+        fo.write("prot1,prot1_res,prot2,prot2_res,distance,kd,weight,sd\n")
+       for key in self._restraints:
+         posi,posj = key
+         dist,ratio= self._restraints[key]
+         name_1,res_1=posi
+         name_2,res_2=posj
+         if name_1 in self._protein_chains: mtype_1="prot"
+         if name_2 in self._protein_chains: mtype_2="prot"
+         if interaction_type == mtype_1+mtype_2 or interaction_type == mtype_2+mtype_1 or interaction_type=="all":
+            fo.write("%s,%s,%s,%s,%10.3f,%10.3f,%10.3f,%10.3f\n"%(name_1,res_1,name_2,res_2,float(dist),float(ratio)*kd,weight,sd))
+       fo.close()
 
    def get_topology_csv(self):
-      table=pd.DataFrame(self._topology)
-      return table
+       """
+       Render topology dictionary as CSV-formatted text rows.
+
+       Args:
+           None.
+
+       Returns:
+           list: CSV lines as strings.
+       """
+       table=pd.DataFrame(self._topology)
+       return table
 
    def set_topology_core(self):
-      data={}
+       """Build core topology rows from currently loaded fragment chains."""
+       data={}
       #red_color   = ["darkred", "firebrick","tomato","red", "orangered", "coral", "orange", "goldenrod","gold","siena","yellow"]
       #blue_color  = ["navy","darkblue","blue","midnightblue","dodgerblue","steelblue","deepskyblue","skyblue","lightblue","cyan","lightcyan"]
       #green_color = ["darkgreen","forestgreen","green","lawngreen","springgreen","lightgreen","limegreen","turquoise","aquamarine"]
       #color = red_color + blue_color + green_color
-      fasta_name = self._id+".topology.fasta"
-      color_molecule = 0
-      for protein in self._protein_chains:
+       fasta_name = self._id+".topology.fasta"
+       color_molecule = 0
+       for protein in self._protein_chains:
           color_molecule = color_molecule + 1
           pdb_chain  = self.get_pdb_and_chain_in_core(protein)
           if pdb_chain is None: continue
@@ -1501,9 +2094,13 @@ class macro_complex(object):
           data.setdefault("rigid_body",[]).append(rb)
           data.setdefault("super_rigid_body",[]).append(" ")
           data.setdefault("chain_of_super_rigid_bodies",[]).append(" ")
-      self._topology=data
+       self._topology=data
 
    def clean_topology(self,fasta_file):
+       """Normalize topology against FASTA sequences and remove duplicates.
+       
+       Args:
+           fasta_file (Any): Path to the input/output file."""
        """
        clean topology by removing isolated proteins unconnected with the complex and without restraints
        missing protein sequences are recovered from the original FastA file with all the sequences 
@@ -1583,6 +2180,11 @@ class macro_complex(object):
        
 
    def complete_topology(self,bead_size=5,domain=None):
+       """Fill missing topology regions with coarse-grained bead segments.
+       
+       Args:
+           bead_size (Any): Value used by this routine.
+           domain (Any): Value used by this routine."""
        """
        Complete the misisng regions (loops and tails) without PDB known structure using BEADS
        'domain' defines the missing regions:
@@ -1758,6 +2360,21 @@ class macro_complex(object):
            return 0
        
    def write_topology(self,output_dir,fasta_file,new=False):
+      """
+            Write topology and companion FASTA files for IMP modeling.
+      
+            Args:
+                output_dir (str): Output directory.
+                fasta_file (str): Source FASTA file.
+                new (bool, optional): If True, regenerate topology from scratch.
+      
+            Returns:
+                None.
+      
+      Args:
+          output_dir (Any): Directory path used by this operation.
+          fasta_file (Any): Path to the input/output file.
+          new (Any): Value used by this routine."""
       #clean the topology by trimming unconnected proteins
       self.clean_topology(fasta_file)
       fasta_name=self._id+".topology.fasta"
@@ -1873,6 +2490,25 @@ class TF_complex(macro_complex):
 
    """
    def __init__(self,name,fragments=None,dna_files=None,complex_files=None,PPI_distance=12):
+       """
+              Initialize a TF-DNA complex container with DNA-specific metadata.
+       
+              Args:
+                  name (str): Complex identifier.
+                  fragments (list, optional): DNA fragment tuples.
+                  dna_files (list, optional): DNA PDB file list.
+                  complex_files (dict, optional): Fragment-to-complex mapping.
+                  PPI_distance (float, optional): PP-interface distance cutoff.
+       
+              Returns:
+                  None.
+       
+       Args:
+           name (Any): Name/label used for this object or output.
+           fragments (Any): Fragment identifier or fragment interval.
+           dna_files (Any): DNA identifier, sequence, or DNA-related data.
+           complex_files (Any): Value used by this routine.
+           PPI_distance (Any): Value used by this routine."""
 
        super(TF_complex,self).__init__(name,fragments,complex_files,PPI_distance)
        if dna_files is not None: self._dna_files = dna_files
@@ -1892,6 +2528,17 @@ class TF_complex(macro_complex):
        self._dna_maxdist = 100.0
 
    def initialize(self,fasta_file):
+       """
+              Initialize DNA/protein core data and corresponding restraints.
+       
+              Args:
+                  fasta_file (str): FASTA file with protein sequences.
+       
+              Returns:
+                  None.
+       
+       Args:
+           fasta_file (Any): Path to the input/output file."""
        print("\t--Get protein chains")
        self.set_proteins_in_core(fasta_file)
        print("\t--Get DNA chains")
@@ -1903,34 +2550,100 @@ class TF_complex(macro_complex):
 
    
    def copy_dna_files(self,dna_files):
+       """
+              Copy DNA PDB file list.
+       
+              Args:
+                  dna_files (list): DNA PDB file list.
+       
+              Returns:
+                  None.
+       
+       Args:
+           dna_files (Any): DNA identifier, sequence, or DNA-related data."""
        self.dna_files=dna_files[:]
 
 
    def copy_dna_chains(self,dna_chains):
+       """
+              Copy DNA-chain labels.
+       
+              Args:
+                  dna_chains (list): DNA-chain identifiers.
+       
+              Returns:
+                  None.
+       
+       Args:
+           dna_chains (Any): DNA identifier, sequence, or DNA-related data."""
        self._dna_chains = dna_chains[:]
 
    def copy_dna_sequences(self,dna_sequences):
+       """
+              Copy DNA sequences.
+       
+              Args:
+                  dna_sequences (list): DNA sequence list.
+       
+              Returns:
+                  None.
+       
+       Args:
+           dna_sequences (Any): DNA identifier, sequence, or DNA-related data."""
        self._dna_sequences = dna_sequences[:]
 
    def set_dna_sdsize(self,dna_sdsize):
+       """Set short-range DNA restraint neighborhood size.
+       
+       Args:
+           dna_sdsize (Any): DNA identifier, sequence, or DNA-related data."""
        self._dna_sdsize = dna_sdsize
 
    def set_dna_xdsize(self,dna_xdsize):
+       """Set long-range DNA restraint neighborhood size.
+       
+       Args:
+           dna_xdsize (Any): DNA identifier, sequence, or DNA-related data."""
        self._dna_xdsize = dna_xdsize
 
    def set_dna_xfactor(self,dna_xfactor):
+       """Set decay factor for long-range DNA restraints.
+       
+       Args:
+           dna_xfactor (Any): DNA identifier, sequence, or DNA-related data."""
        self._dna_xfactor = dna_xfactor
 
    def set_dna_sfactor(self,dna_sfactor):
+       """Set decay factor for short-range DNA restraints.
+       
+       Args:
+           dna_sfactor (Any): DNA identifier, sequence, or DNA-related data."""
        self._dna_sfactor = dna_sfactor
 
    def set_dna_bead(self,dna_bead):
+       """Set DNA bead granularity for topology generation.
+       
+       Args:
+           dna_bead (Any): DNA identifier, sequence, or DNA-related data."""
        self._dna_bead = dna_bead
 
    def set_dna_maxdist(self,dna_maxdist):
+       """Set maximum DNA restraint distance cutoff.
+       
+       Args:
+           dna_maxdist (Any): DNA identifier, sequence, or DNA-related data."""
        self._dna_maxdist = dna_maxdist
 
    def set_dna(self):
+       """
+       Load DNA chain metadata and sequences from fragment PDB files.
+
+       Args:
+           None.
+
+       Returns:
+           None.
+       """
        dna_chains=[]
        dna_sequences={}
        for i in range(len(self._fragments)):
@@ -1965,13 +2678,23 @@ class TF_complex(macro_complex):
            self._dna_sequences.append(dna_sequences[dna_code])
     
    def set_protein_reference_site(self,reference_site):
+       """Override protein reference-site mapping.
+       
+       Args:
+           reference_site (Any): Value used by this routine."""
        for k,p in reference_site.items():
            self._protein_reference_site.setdefault(k,p)
 
    def set_reference_site(self,protein,site):
+       """Assign a reference-site set to one protein.
+       
+       Args:
+           protein (Any): Protein identifier, object, or protein-related data.
+           site (Any): Value used by this routine."""
        self._protein_reference_site.setdefault(protein,site)
 
    def set_interfaces_and_restraints_in_core(self):
+       """Build core interfaces and restraints including protein-DNA contacts."""
        #this method initializes the set of restraints
        for fragment in self._fragments:
            print(("\t--Get restraints PPI and TF-DNA in fragment "+str(fragment)))
@@ -2021,6 +2744,16 @@ class TF_complex(macro_complex):
                    self._restraints.setdefault(tuple( (pos_prot_1,pos_prot_2) ) ,(distance,1.0) )
 
    def set_DNA_restraints(self,fragment=None,sdsize=None,xdsize=None,sfactor=None,xfactor=None,threshold=None,maxdist=None):
+       """Generate DNA internal restraints for one/all fragments.
+       
+       Args:
+           fragment (Any): Fragment identifier or fragment interval.
+           sdsize (Any): Value used by this routine.
+           xdsize (Any): Value used by this routine.
+           sfactor (Any): Value used by this routine.
+           xfactor (Any): Value used by this routine.
+           threshold (Any): Threshold value controlling filtering or acceptance.
+           maxdist (Any): Maximum limit used by the routine."""
        if sdsize is None: sdsize=self._dna_sdsize
        if xdsize is None: xdsize=self._dna_xdsize
        if sfactor is None: sfactor=self._dna_sfactor
@@ -2140,36 +2873,81 @@ class TF_complex(macro_complex):
 
 
    def get_dna_chains(self):
+       """
+       Return DNA-chain labels.
+
+       Args:
+           None.
+
+       Returns:
+           list: DNA-chain labels.
+       """
        return self._dna_chains
 
    def get_dna_bead_size(self):
+       """Return DNA bead size."""
        return self._dna_bead
 
    def get_dna_files(self):
+       """
+       Return DNA PDB file list.
+
+       Args:
+           None.
+
+       Returns:
+           list: DNA file paths.
+       """
        return self._dna_files
 
    def get_dna_sequences(self):
+       """
+       Return DNA sequences.
+
+       Args:
+           None.
+
+       Returns:
+           list: DNA sequence list.
+       """
        return self._dna_sequences
 
    def get_dna_sdsize(self):
+       """Return short-range DNA neighborhood size."""
        return self._dna_sdsize 
 
    def get_dna_xdsize(self):
+       """Return long-range DNA neighborhood size."""
        return self._dna_xdsize 
 
    def get_dna_xfactor(self):
+       """Return long-range DNA decay factor."""
        return self._dna_xfactor 
 
    def get_dna_sfactor(self):
+       """Return short-range DNA decay factor."""
        return self._dna_sfactor 
 
    def get_dna_bead(self):
+       """Return DNA bead granularity."""
        return self._dna_bead
 
    def get_dna_maxdist(self):
+       """Return DNA maximum-distance cutoff for restraints."""
        return self._dna_maxdist 
 
    def copy(self,name):
+       """
+              Deep-copy TF-complex metadata into a new instance.
+       
+              Args:
+                  name (str): Identifier for the copied complex.
+       
+              Returns:
+                  TF_complex: Copied TF-complex instance.
+       
+       Args:
+           name (Any): Name/label used for this object or output."""
 
        other = self.__class__(name)                              
        other.copy_fragments(self.get_fragments())
@@ -2202,6 +2980,13 @@ class TF_complex(macro_complex):
        return other
 
    def restraints_to_csv(self,interaction_type="all",kd=20.0,weight=1.0,sd=1.0):
+       """Convert TF-complex restraints into CSV-style records.
+       
+       Args:
+           interaction_type (Any): Value used by this routine.
+           kd (Any): Value used by this routine.
+           weight (Any): Value used by this routine.
+           sd (Any): Value used by this routine."""
        data={}
        for key in self._restraints:
          posi,posj = key
@@ -2225,6 +3010,25 @@ class TF_complex(macro_complex):
        return table
 
    def write_restraints(self,output,interaction_type="all",kd=20.0,weight=1.0,sd=1.0):
+      """
+            Write TF-complex restraints to CSV.
+      
+            Args:
+                output (str): Output CSV file path.
+                interaction_type (str, optional): Interaction filter.
+                kd (float, optional): Spring-constant value.
+                weight (float, optional): Restraint weight.
+                sd (float, optional): Standard deviation.
+      
+            Returns:
+                None.
+      
+      Args:
+          output (Any): Value used by this routine.
+          interaction_type (Any): Value used by this routine.
+          kd (Any): Value used by this routine.
+          weight (Any): Value used by this routine.
+          sd (Any): Value used by this routine."""
       if os.path.exists(output) and os.path.isfile(output):
        fo=open(output,"a")
       else:
@@ -2244,6 +3048,15 @@ class TF_complex(macro_complex):
       fo.close()
 
    def set_topology_core(self):
+      """
+      Build topology rows including DNA and protein molecules.
+
+      Args:
+          None.
+
+      Returns:
+          None.
+      """
       data={}
       red_color   = ["darkred", "firebrick","tomato","red", "orangered", "coral", "orange", "goldenrod","gold","siena","yellow"]
       blue_color  = ["navy","darkblue","blue","midnightblue","dodgerblue","steelblue","deepskyblue","skyblue","lightblue","cyan","lightcyan"]
@@ -2368,14 +3181,40 @@ class TF_complex(macro_complex):
 #-------------#
 
 def is_dna(chain):
-    residues = chain.get_residues()
-    for residue in residues:
-        if residue.get_resname().strip() in ["DA", "DT", "DG", "DC", "DU"]:
-            return True
-        else:
-            return False
+   """
+      Return whether a chain is nucleotide-like.
+   
+      Args:
+          chain (Chain): SBI chain object.
+   
+      Returns:
+          bool: True for DNA/RNA chains, False otherwise.
+   
+   Args:
+       chain (Any): Chain identifier."""
+   residues = chain.get_residues()
+   for residue in residues:
+       if residue.get_resname().strip() in ["DA", "DT", "DG", "DC", "DU"]:
+           return True
+       else:
+           return False
 
 def merge_mmcif_header(header,cif1,cif2):
+    """
+        Merge mmCIF header/content information into a destination file.
+    
+        Args:
+            header (str): Path to an optional header template file.
+            cif1 (str): Source mmCIF file to merge.
+            cif2 (str): Output mmCIF file path.
+    
+        Returns:
+            None.
+    
+    Args:
+        header (Any): Value used by this routine.
+        cif1 (Any): Value used by this routine.
+        cif2 (Any): Value used by this routine."""
     if os.path.exists(cif2): os.remove(cif2)
     fo=open(cif2,"w")
     skip=False
@@ -2419,55 +3258,89 @@ def merge_mmcif_header(header,cif1,cif2):
        fi.close()
 
 def renamed_complexes_set(complexes):
+      """
+            Rename complexes to non-colliding sequential names.
+      
+            Args:
+                complexes (list): List of complex objects.
+      
+            Returns:
+                list: Renamed non-redundant complex objects.
+      
+      Args:
+          complexes (Any): Value used by this routine."""
 
-
-    new_complexes = []
-    names = {}
-    for x in complexes:
-        name = x.get_name()
-        #x.set_restrict_equal(False)
-        root = name.split(".")[0]
-        names.setdefault(root,[]).append(x)
-    for r_name,list_x in names.items():
-        text_of_cmpx=", ".join([cx.get_name() for cx in list_x])
-        print(("\t\tRename complexes of %s: %s "%(r_name,text_of_cmpx)))
-        size = len(list_x)
-        done = []
-        n    = size
-        for i in range(size):
-            new_name   = r_name+"."+str(i)
-            tfcomplex  = list_x[i]
-            skip = False
-            for t2_complex in done:
+      new_complexes = []
+      names = {}
+      for x in complexes:
+          name = x.get_name()
+          root = name.split(".")[0]
+          names.setdefault(root,[]).append(x)
+      for r_name,list_x in names.items():
+          text_of_cmpx=", ".join([cx.get_name() for cx in list_x])
+          print(("\t\tRename complexes of %s: %s "%(r_name,text_of_cmpx)))
+          size = len(list_x)
+          done = []
+          n    = size
+          for i in range(size):
+              new_name   = r_name+"."+str(i)
+              tfcomplex  = list_x[i]
+              skip = False
+              for t2_complex in done:
+                if skip: continue
+                if tfcomplex == t2_complex:
+                   print(("\t\t--Redundancy: %s is already as the new named %s"%(tfcomplex.get_name(),t2_complex.get_name())))
+                   skip = True
+                   break
               if skip: continue
-              if tfcomplex == t2_complex:
-                 print(("\t\t--Redundancy: %s is already as the new named %s"%(tfcomplex.get_name(),t2_complex.get_name())))
-                 skip = True
-                 break
-            if skip: continue
-            for t2_complex in done:
-                done_name = t2_complex.get_name()
-                if new_name == done_name:
-                   new_name = r_name+"."+str(n)
-                   n = n +1
-            print(("\t\t--Rename complex %s as %s"%(tfcomplex.get_name(),new_name)))
-            tfcomplex.set_name(new_name)
-            done.append(tfcomplex)
-            new_complexes.append(tfcomplex)
-    return new_complexes
+              for t2_complex in done:
+                  done_name = t2_complex.get_name()
+                  if new_name == done_name:
+                     new_name = r_name+"."+str(n)
+                     n = n +1
+              print(("\t\t--Rename complex %s as %s"%(tfcomplex.get_name(),new_name)))
+              tfcomplex.set_name(new_name)
+              done.append(tfcomplex)
+              new_complexes.append(tfcomplex)
+      return new_complexes
  
 
  
 def dna_reverse(nuc):
-    dna_complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'}
-    complement = "".join([dna_complement[n] for n in nuc])
-    reverse = "".join([complement[len(complement) - i - 1] for i in range(len(complement))])
-    return reverse
+      """
+            Compute the reverse-complement nucleotide sequence.
+      
+            Args:
+                nuc (str): Input nucleotide string.
+      
+            Returns:
+                str: Reverse-complement sequence.
+      
+      Args:
+          nuc (Any): Value used by this routine."""
+      dna_complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'}
+      complement = "".join([dna_complement[n] for n in nuc])
+      reverse = "".join([complement[len(complement) - i - 1] for i in range(len(complement))])
+      return reverse
 
 def write_pseudo_mmcif(pdb_obj,mmcif_file,header_only=False,force=False):
     """
-    preliminar code to write coordiantes of a PDB object from SBI in mmCif format (version for py2 of SBI doesn't have this possibility)
-    """
+        Write a pseudo-mmCIF file from an in-memory PDB object.
+    
+        Args:
+            pdb_obj (PDB): SBI PDB object to serialize.
+            mmcif_file (str): Output mmCIF file path.
+            header_only (bool, optional): Write only header/entity blocks.
+            force (bool, optional): Overwrite existing file if True.
+    
+        Returns:
+            None.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        mmcif_file (Any): Path to the input/output file.
+        header_only (Any): Value used by this routine.
+        force (Any): Value used by this routine."""
 
     if force==True and os.path.exists(mmcif_file): os.remove(mmcif_file)
 
@@ -2671,12 +3544,17 @@ def write_pseudo_mmcif(pdb_obj,mmcif_file,header_only=False,force=False):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for regulatory complex assembly.
 
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed options controlling input/output folders and
+        complex-building limits.
     """
 
-    parser = optparse.OptionParser("python tf_complex.py -i input_folder  -d data_folder [ -o output_name ]")
+    parser = optparse.OptionParser("python regulatory_complex.py -i INPUT_FOLDER -d DATA_FOLDER [-o OUTPUT_NAME]")
 
     parser.add_option("-i", action="store", type="string", dest="input_folder", default=None, help="Input folder, contains folders 'pair_interactions' and 'TF_DNA_FRAGMENTS' as from ModCRE", metavar="{directory}")
     parser.add_option("-d", action="store", type="string", dest="data_folder", default=None, help="Output folder with restraints and topology to run IMP modelling", metavar="{directory}")
@@ -2701,6 +3579,18 @@ def parse_options():
 #-------------#
 
 if __name__ == "__main__":
+    """
+    Main workflow for assembling regulatory complexes and writing IMP inputs.
+
+    It loads fragment complexes, merges compatible combinations, derives
+    topology/restraint tables, and writes modeling-ready files.
+
+    Args:
+        None.
+
+    Returns:
+        None. Topology/restraint/model files are written to `data_folder`.
+    """
 
     # Arguments & Options #
     options = parse_options()

@@ -56,11 +56,41 @@ from ModCRElib.sequence import blast
 
 class PirAlignment(object):
     """
-    This class defines a {PirAlignment} object.
+    Store and serialize one PIR alignment between query and template chains.
 
+    Object features:
+        - **Identifiers**
+            - `_sequence`: query sequence label in PIR headers.
+            - `_structure`: template structure label in PIR headers.
+            - `_hit`: original hit identifier (BLAST/threading provenance).
+        - **Residue ranges**
+            - `_sequence_residues`: query residue boundaries used in PIR records.
+            - `_structure_residues`: template residue boundaries used in PIR records.
+        - **Chain composition**
+            - `_structure_chains`: template chain IDs included in the model.
+            - `_main_order`: order/index metadata for main chains in complexes.
+        - **Alignment content**
+            - `_sequence_alignments`: query alignment blocks.
+            - `_structure_alignments`: template alignment blocks.
+            - both sets are emitted/parsed in PIR-compatible multi-block format.
+        - **Modeling metadata**
+            - `_domain`: modeled domain string (for logging/selection).
+            - `_identity` and `_similarity`: alignment quality metrics.
+            - `_heterodimer`: optional flag describing dimer composition.
     """
 
     def __init__(self, file_name=None):
+        """
+                Initialize a PIR alignment container.
+        
+                Args:
+                    file_name (str, optional): Existing PIR file to parse.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         self._file = file_name
         self._hit = None
         self._sequence = None
@@ -81,6 +111,15 @@ class PirAlignment(object):
             self._parse_file()
 
     def _parse_file(self):
+        """
+        Parse a PIR file and populate internal alignment attributes.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         # Alignment #
         for line in functions.parse_file(self._file):
             m = re.search("^structureX:(.{4}):(\d+):(.):(\d+):(.)::::", line)
@@ -103,21 +142,37 @@ class PirAlignment(object):
                     self._sequence_alignments.append(m.group(1))
 
     def get_sequence_name(self):
+        """Return query sequence identifier."""
         return self._sequence
 
     def get_structure_name(self):
+        """Return template structure identifier."""
         return self._structure
 
     def get_structure_chains(self):
+        """Return sorted template chain identifiers."""
         return sorted(self._structure_chains)
 
     def get_identity(self):
+        """Return alignment identity percentage/value."""
         return self._identity
 
     def get_similarity(self):
+        """Return alignment similarity percentage/value."""
         return self._similarity
 
     def get_alignments(self, atype="sequence"):
+        """
+                Return stored alignment strings for query or structure.
+        
+                Args:
+                    atype (str, optional): `sequence` or `structure`.
+        
+                Returns:
+                    list: Alignment strings of the requested type.
+        
+        Args:
+            atype (Any): Value used by this routine."""
         if atype != "sequence" and atype != "structure":
             atype = "sequence"
 
@@ -127,51 +182,116 @@ class PirAlignment(object):
         return self._structure_alignments
 
     def add_hit_name(self, name):
+        """Set BLAST/threading hit identifier.
+        
+        Args:
+            name (Any): Name/label used for this object or output."""
         self._hit = name
 
     def add_sequence_name(self, name):
+        """Set query sequence identifier.
+        
+        Args:
+            name (Any): Name/label used for this object or output."""
         self._sequence = name
 
     def add_structure_name(self, name):
+        """Set template structure identifier.
+        
+        Args:
+            name (Any): Name/label used for this object or output."""
         self._structure = name
 
     def add_sequence_residue(self, residue_num):
+        """Append a query residue boundary/index value.
+        
+        Args:
+            residue_num (Any): Numeric identifier/index used by this routine."""
         self._sequence_residues.append(residue_num)
 
     def add_structure_residue(self, residue_num):
+        """Append a template residue boundary/index value.
+        
+        Args:
+            residue_num (Any): Numeric identifier/index used by this routine."""
         self._structure_residues.append(residue_num)
 
     def add_structure_chain(self, chain):
+        """Append a template chain identifier.
+        
+        Args:
+            chain (Any): Chain identifier."""
         self._structure_chains.append(chain)
 
     def add_sequence_alignment(self, alignment):
+        """Append one query alignment segment.
+        
+        Args:
+            alignment (Any): Sequence/alignment content used in this step."""
         self._sequence_alignments.append(alignment)
 
     def add_structure_alignment(self, alignment):
+        """Append one template alignment segment.
+        
+        Args:
+            alignment (Any): Sequence/alignment content used in this step."""
         self._structure_alignments.append(alignment)
 
     def add_domain(self, domain):
+        """Set modeled domain descriptor string.
+        
+        Args:
+            domain (Any): Value used by this routine."""
         self._domain = domain
 
     def get_domain(self):
+        """Return modeled domain descriptor."""
         return self._domain 
 
     def add_main_order(self, main_order):
+        """Append primary chain/order index for complex modeling.
+        
+        Args:
+            main_order (Any): Value used by this routine."""
         self._main_order.append(main_order)
 
     def get_main_order(self):
+        """Return stored primary chain/order indices."""
         return self._main_order 
 
     def set_heterodimer(self, heterodimer):
+        """Set heterodimer status metadata.
+        
+        Args:
+            heterodimer (Any): Value used by this routine."""
         self._heterodimer = heterodimer
 
     def set_identity(self, identity):
+        """Set alignment identity metric.
+        
+        Args:
+            identity (Any): Value used by this routine."""
         self._identity = identity
 
     def set_similarity(self, similarity):
+        """Set alignment similarity metric.
+        
+        Args:
+            similarity (Any): Value used by this routine."""
         self._similarity = similarity
 
     def write(self, file_name):
+        """
+                Write this alignment in PIR format.
+        
+                Args:
+                    file_name (str): Destination PIR file path.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         functions.write(file_name, ">P1;%s" % self._structure)
         functions.write(file_name, "structureX:%s:%s:%s:%s:%s::::" % (self._structure, self._structure_residues[0], self._structure_chains[0], self._structure_residues[-1], self._structure_chains[-1]))
         functions.write(file_name, "%s*" % "/\n".join([re.sub("[xX]", "-", i) for i in self._structure_alignments]))
@@ -184,41 +304,80 @@ class PirAlignment(object):
 #-------------#
 
 def fileExist(file):
-    '''
-    Check existing files
-    '''
+    """
+        Check whether a path points to an existing regular file.
+    
+        Args:
+            file (str or None): File path to validate.
+    
+        Returns:
+            bool: True when `file` exists and is a file, False otherwise.
+    
+    Args:
+        file (Any): Path to the input/output file."""
     if file is not None:
         return os.path.exists(file) and os.path.isfile(file)
     else:
         return False
 
 def make_subdirs(main, subdirs):
-    '''
-    This function makes all subdirs listed in "subdirs".
-    '''
+    """
+        Create a set of subdirectories under a parent directory.
+    
+        Args:
+            main (str): Parent directory path.
+            subdirs (list): Relative subdirectory names to create.
+    
+        Returns:
+            None.
+    
+    Args:
+        main (Any): Value used by this routine.
+        subdirs (Any): Value used by this routine."""
 
     for subdir in subdirs:
         if not os.path.exists(os.path.join(main, subdir)):
             os.makedirs(os.path.join(main, subdir))
 
 def remove_files(files):
-    '''
-    This function removes all files listed in "files".
-    '''
+    """
+        Remove existing files from a provided list of paths.
+    
+        Args:
+            files (list): File paths to remove if present.
+    
+        Returns:
+            None.
+    
+    Args:
+        files (Any): Value used by this routine."""
 
     for each_file in files:
         if os.path.exists(each_file):
             os.remove(each_file)
 
 def bijection_sequence_to_sequence(sequences_a,sequences_b,dummy_dir="tmp",homodimer=False):
-    ''' 
-     Define the association of most similar sequences
-     sequences_a is a dictionary of sequences {name:sequence}
-     sequences_b is a dictionary of sequences {name:sequence}
-     dummy_dir  Dummy directory to cerate file
-     the output is a dictionary of associations {name_a:name_b} and {name_b:name_a}
-
-    '''
+    """
+        Pair sequence identifiers between two sets by highest sequence similarity.
+    
+        Pairing is computed from pairwise alignments (ClustalW or EMBOSS matcher as
+        fallback). The best counterpart is selected by identity and then alignment
+        span length.
+    
+        Args:
+            sequences_a (dict): Mapping `{name: sequence}` for first set.
+            sequences_b (dict): Mapping `{name: sequence}` for second set.
+            dummy_dir (str, optional): Temporary directory for alignment files.
+            homodimer (bool, optional): Allow reusing pair targets if True.
+    
+        Returns:
+            dict: Bidirectional pairing map `{name_a: name_b, name_b: name_a}`.
+    
+    Args:
+        sequences_a (Any): Sequence/alignment content used in this step.
+        sequences_b (Any): Sequence/alignment content used in this step.
+        dummy_dir (Any): Directory path used by this operation.
+        homodimer (Any): Value used by this routine."""
     #Initialize
     from SBILib.structure.chain import Chain
     from SBILib.structure.chain import ChainOfProtein
@@ -326,23 +485,50 @@ def bijection_sequence_to_sequence(sequences_a,sequences_b,dummy_dir="tmp",homod
     return pairing
 
 
+def relabel_codes_with_references(original_codes,base):
+    """
+        Assign deterministic unique labels while preserving original code order.
+    
+        Args:
+            original_codes (list): Original chain/code labels.
+            base (list): Base alphabet used to generate new labels.
+    
+        Returns:
+            list: Tuples `(original_code, new_unique_label)`.
+    
+    Args:
+        original_codes (Any): Value used by this routine.
+        base (Any): Value used by this routine."""
+    n = len(original_codes)
+    new_labels = []
+    for i in range(n):
+        letter = base[i % 26]
+        suffix = '' if i < 26 else str(i // 26)
+        new_label = str(letter)+str(suffix) 
+        new_labels.append((original_codes[i], new_label))
+    return new_labels
+
+
 def chains_fixed(pdb):
-    ''' 
-     Rename the chains of PDB file located in path folder 
-     A,B,C,D ... for proteins
-     a,b,c,d ... for nucleid acids
-
-     path	Folder where PDB file is located
-     pdb 	PDB file
-     dummy_dir  Dummy directory to cerate files
-
-    '''
+    """
+        Rename chains of a PDB object to canonical protein/DNA labels.
+    
+        Protein chains are relabeled as `A, B, C, ...` and nucleic-acid chains as
+        `a, b, c, ...`, preserving order within each molecule type.
+    
+        Args:
+            pdb (PDB): Input PDB object.
+    
+        Returns:
+            PDB: PDB object with normalized chain identifiers.
+    
+    Args:
+        pdb (Any): PDB object or structure file input."""
     #Initialize
     from SBILib.structure.chain import Chain
     from SBILib.structure.chain import ChainOfProtein
     from SBILib.structure.chain import ChainOfNucleotide
     from SBILib.structure import PDB
-
     protein_chains=list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     nucleic_chains=list("abcdefghijklmnopqrstuvwxyz")
     name_pdb=pdb.id
@@ -353,42 +539,72 @@ def chains_fixed(pdb):
     for chain_id in pdb.chain_identifiers:
         chain=pdb.get_chain_by_id(chain_id)
         print(("\t\t\t\tCHAIN ID: %s TYPE %s "%(chain_id,chain.chaintype)))
-        if chain.chaintype == "N": 
+        if chain.chaintype == "N" : 
             nucleic_ids.append(chain_id)
         else:
             protein_ids.append(chain_id)
     print(("\t\t\t\tPROTEIN CHAINS %s"%str(protein_ids)))
     print(("\t\t\t\tNUCLEIC CHAINS %s"%str(nucleic_ids)))
-    for i in range(len(nucleic_ids)):
-        chain_id = nucleic_ids[i]
+    nucleic_labels = relabel_codes_with_references(nucleic_ids,nucleic_chains)
+    protein_labels = relabel_codes_with_references(protein_ids,protein_chains)
+    print("\t\t\t\tRename chains",nucleic_labels,protein_labels)
+    n=0
+    for chain_id in pdb.chain_identifiers:
+        print("\t\t\t\tCheck chain ", chain_id)
+        if chain_id in protein_ids: 
+           print("\t\t\t\t\tSkip protein...")
+           continue
+        print("\t\t\t\t\tget chain...")
         chain=pdb.get_chain_by_id(chain_id)
-        n=int(float(i)/len(nucleic_chains))
-        if n>0: new_id=nucleic_chains[i]+str(n)
-        else:   new_id=nucleic_chains[i]
+        print("\t\t\t\t\ttype chain",chain.chaintype)
+        if chain.chaintype != "N" : continue
+        print("\t\t\t\t\tUse new name..")
+        check,new_id = nucleic_labels[n]
+        if check != chain_id:
+           print("Error in chain fixing, codes are different %s %s"%(chain_id,check))
+        n = n + 1
         chain.chain=new_id
+        print("\t\t\t\tAdd ",chain.chain)
         new_pdb.add_chain(chain)
-    for i in range(len(protein_ids)):
-        chain_id = protein_ids[i]
+    n=0
+    for chain_id in pdb.chain_identifiers:
+        print("\t\t\t\tCheck chain ", chain_id)
+        if chain_id in nucleic_ids: 
+           print("\t\t\t\t\tSkip nucleic...")
+           continue
+        print("\t\t\t\t\tget chain...")
         chain=pdb.get_chain_by_id(chain_id)
-        n=int(float(i)/len(protein_chains))
-        if n>0: new_id=protein_chains[i]+str(n)
-        else:   new_id=protein_chains[i]
+        print("\t\t\t\t\ttype chain",chain.chaintype)
+        if chain.chaintype == "N": continue
+        print("\t\t\t\t\tUse new name...")
+        check,new_id = protein_labels[n]
+        if check != chain_id:
+           print("Error in chain fixing, codes are different %s %s"%(chain_id,check))
+        n = n + 1
         chain.chain=new_id
+        print("\t\t\t\tAdd ",chain.chain)
         new_pdb.add_chain(chain)
-
     return new_pdb
 
 def renumber_pdb(pdb_file,sequences,dummy_dir="/tmp"):
-    ''' 
-     Renumber PDB file located in path folder with the real sequences
-
-     path	Folder where PDB file is located
-     pdb 	PDB file
-     sequences  dictionary of sequence tuples (name,seq) by chain id
-                chain identifier is the key of the dictionary
-     dummy_dir  Dummy directory to cerate files
-
-    '''
+    """
+        Renumber protein residues in a PDB using provided reference sequences.
+    
+        The function aligns each protein chain sequence to the reference and
+        rewrites numbering to match sequence coordinates.
+    
+        Args:
+            pdb_file (str): Input PDB file path.
+            sequences (dict): Mapping `{chain_id: (name, sequence)}`.
+            dummy_dir (str, optional): Temporary directory for intermediate files.
+    
+        Returns:
+            PDB: Renumbered PDB object.
+    
+    Args:
+        pdb_file (Any): Path to the input/output file.
+        sequences (Any): Sequence/alignment content used in this step.
+        dummy_dir (Any): Directory path used by this operation."""
 
     #Initialize
     from SBILib.structure.chain import Chain
@@ -406,6 +622,7 @@ def renumber_pdb(pdb_file,sequences,dummy_dir="/tmp"):
     name_pdb = os.path.basename(pdb_file)
     path     = os.path.dirname(pdb_file)
     pdb=PDB(pdb_file)
+    print("Clean")
     pdb.clean()
     for chain_id,chain_seq in sequences.items():
        name_chain = name_pdb+"_"+chain_id
@@ -502,6 +719,21 @@ def renumber_pdb(pdb_file,sequences,dummy_dir="/tmp"):
     return new_pdb  
 
 def create_mapping(idx,structure,reference):
+    """
+        Build residue-index mapping between aligned structure and reference strings.
+    
+        Args:
+            idx (list): Residue identifiers in structure order.
+            structure (str): Structure-aligned sequence (with gaps).
+            reference (str): Reference-aligned sequence (with gaps).
+    
+        Returns:
+            dict: Mapping from old residue identifiers to new indices.
+    
+    Args:
+        idx (Any): Value used by this routine.
+        structure (Any): Value used by this routine.
+        reference (Any): Value used by this routine."""
     mapped={}
     n=0
     m=0
@@ -532,8 +764,13 @@ def create_mapping(idx,structure,reference):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for template-based protein modeling.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for modeling inputs and controls.
 
     """
 
@@ -593,24 +830,52 @@ def parse_options():
 def get_pir_alignments(query_file, pdb_dir, full_mode=False,  filter_twilight_zone_hits=False, resolutions=None, select_mode=False, dummy_dir="/tmp/", original_sequence=None, 
                        thread_obj=None, no_restrict_usage=False, dimer_mode=False, monomer_mode=False, verbose=False, filter_restrictive=False, best_mode=False, iteration=0, start_time=0):
     """
-    This function blasts a query sequence against the PDB database and 
-    returns a list of {PirAlignment}s, according to some criteria.
-
-    @input:
-    query_file {filename}
-    pdb_dir {directory}
-    filter_twilight_zone_hits {boolean} default = False
-    resolutions {dict} default = None
-    select_mode {boolean} selects either monomers or dimers, whichever has more hits; default = False
-    dimer_mode {boolean} only dimer templates are allowed
-    monomer_mode {boolean} only monomer templates are allowed
-    dummy_dir {directory} default = /tmp
-    verbose {boolean} to print output steps of the work
-    filter_restrictive {boolean} default = False to be retsrictive on the twilight_zone_hits criterion
-    @return:
-    selected_pir_alignments / pir_alignments {list} of {PirAlignment}
-
-    """
+        Build candidate PIR alignments against structural templates.
+    
+        The workflow performs homolog search, applies interface-aware filtering,
+        evaluates monomer/dimer constraints, and returns selected template
+        alignments for downstream modeling.
+    
+        Args:
+            query_file (str): FASTA query file path.
+            pdb_dir (str): PDB resource directory.
+            full_mode (bool, optional): Allow full-fragment modeling behavior.
+            filter_twilight_zone_hits (bool, optional): Enforce twilight filtering.
+            resolutions (dict, optional): Optional template-resolution dictionary.
+            select_mode (bool, optional): Auto-select monomer vs dimer set.
+            dummy_dir (str, optional): Temporary directory root.
+            original_sequence (list, optional): Original sequence metadata.
+            thread_obj (Threaded, optional): Optional threading object input.
+            no_restrict_usage (bool, optional): Relax interface restrictions.
+            dimer_mode (bool, optional): Force dimer template selection.
+            monomer_mode (bool, optional): Force monomer template selection.
+            verbose (bool, optional): Enable verbose logs.
+            filter_restrictive (bool, optional): Strict twilight enforcement.
+            best_mode (bool, optional): Keep only top hit/alignment.
+            iteration (int, optional): Recursive iteration counter.
+            start_time (float, optional): Start timestamp for timeout guard.
+    
+        Returns:
+            list: Selected `PirAlignment` objects.
+    
+    Args:
+        query_file (Any): Path to the input/output file.
+        pdb_dir (Any): Directory path used by this operation.
+        full_mode (Any): Value used by this routine.
+        filter_twilight_zone_hits (Any): Value used by this routine.
+        resolutions (Any): Value used by this routine.
+        select_mode (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation.
+        original_sequence (Any): Sequence/alignment content used in this step.
+        thread_obj (Any): Value used by this routine.
+        no_restrict_usage (Any): Value used by this routine.
+        dimer_mode (Any): Value used by this routine.
+        monomer_mode (Any): Value used by this routine.
+        verbose (Any): Boolean flag controlling routine behavior.
+        filter_restrictive (Any): Value used by this routine.
+        best_mode (Any): Value used by this routine.
+        iteration (Any): Ratio parameter controlling scaling or trimming.
+        start_time (Any): Value used by this routine."""
 
     # Initialize #
     hits = []
@@ -1106,21 +1371,28 @@ def get_pir_alignments(query_file, pdb_dir, full_mode=False,  filter_twilight_zo
 
 def filter_blast_hits_by_interface(query_file, blast_obj, pdb_dir, filter_twilight_zone_hits=False, dummy_dir="/tmp/", no_restrict=False,best_mode=False):
     """
-    This function filters hits if the query does not cover all interface
-    interface residues or the alignments contain insertions or deletions in
-    structured regions containing any interface residues.
-
-    @input:
-    query_file {filename}
-    blast_obj {BlastOutput}
-    pdb_dir {directory}
-    filter_twilight_zone_hits {boolean} default = False
-    dummy_dir {directory} default = /tmp
-
-    @return:
-    unfiltered_hits {list}
+        Filter BLAST hits using interface coverage and structural-gap criteria.
     
-    """
+        Args:
+            query_file (str): Query FASTA file path.
+            blast_obj (BlastOutput): BLAST result object.
+            pdb_dir (str): PDB resource directory.
+            filter_twilight_zone_hits (bool, optional): Apply twilight filter.
+            dummy_dir (str, optional): Temporary directory root.
+            no_restrict (bool, optional): Disable strict interface restrictions.
+            best_mode (bool, optional): Keep only best passing hit.
+    
+        Returns:
+            list: Accepted hit tuples with refined alignments and metadata.
+    
+    Args:
+        query_file (Any): Path to the input/output file.
+        blast_obj (Any): Value used by this routine.
+        pdb_dir (Any): Directory path used by this operation.
+        filter_twilight_zone_hits (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation.
+        no_restrict (Any): Value used by this routine.
+        best_mode (Any): Value used by this routine."""
     
     # Initialize #
     unfiltered_hits = []
@@ -1141,7 +1413,7 @@ def filter_blast_hits_by_interface(query_file, blast_obj, pdb_dir, filter_twilig
         # Skip if  e-value is larger than a certain threshold #
         e_thres = float(config.get("Parameters", "e-value_threshold"))
         if (float(str(hit_obj).split("\t")[5]) > float(e_thres)) :
-            sys.stdout.write("\t\t-- Skip alignment %s %s : limitted by e-value threshold %.4f > %.4f \n"%(os.path.basename(hit_file),os.path.basename(query_file),float(str(hit_obj).split("\t")[5]),float(e_thres)))
+            sys.stdout.write("\t\t-- Skip alignment %s %s : limited by e-value threshold %.4f > %.4f \n"%(os.path.basename(hit_file),os.path.basename(query_file),float(str(hit_obj).split("\t")[5]),float(e_thres)))
             sys.stdout.flush()
             continue
         # Refine alignment #   
@@ -1217,22 +1489,19 @@ def filter_blast_hits_by_interface(query_file, blast_obj, pdb_dir, filter_twilig
 
 def exec_matcher(A, B):
     """
-    This function aligns a pair of sequences "A" and "B" using
-    matcher from the EMBOSS package.
-
-    @input:
-    query_file {filename}
-    hit_file {filename}
-
-    @return:
-    query_alignment {string} or None
-    hit_alignment {string} or None
-    query_start {int} or None
-    query_end {int} or None
-    hit_start {int} or None
-    hit_end {int} or None
-
-    """
+        Align two sequences/files with EMBOSS `matcher`.
+    
+        Args:
+            A (str): First sequence FASTA file.
+            B (str): Second sequence FASTA file.
+    
+        Returns:
+            tuple: `(A_alignment, B_alignment, A_start, A_end, B_start, B_end,
+            identity, similarity)`.
+    
+    Args:
+        A (Any): Value used by this routine.
+        B (Any): Value used by this routine."""
 
 
     try:
@@ -1287,19 +1556,20 @@ def exec_matcher(A, B):
 
 def get_sequence_to_crystal_correlations(pdb_obj, pdb_chain, gapped=True):
     """
-    This function returns the 1 to 1 correlation between sequence and crystal
-    positions.
-
-    @input:
-    pdb_obj {PDB}
-    pdb_chain {string}
-    gapped {boolean} default = True
-
-    @return:
-    sequence_to_crystal {dictionary} sequence position, crystal position
-    crystal_to_sequence {dictionary} crystal position, sequence position
+        Build bidirectional mapping between sequence and crystal residue indices.
     
-    """
+        Args:
+            pdb_obj (PDB): Input structure object.
+            pdb_chain (str): Protein chain identifier.
+            gapped (bool, optional): Use gapped sequence representation.
+    
+        Returns:
+            tuple: `(sequence_to_crystal, crystal_to_sequence)` dictionaries.
+    
+    Args:
+        pdb_obj (Any): PDB object or structure file input.
+        pdb_chain (Any): PDB structure identifier and chain selector.
+        gapped (Any): Value used by this routine."""
 
     # Initialize #
     sequence_to_crystal = {}
@@ -1331,6 +1601,25 @@ def get_sequence_to_crystal_correlations(pdb_obj, pdb_chain, gapped=True):
     return sequence_to_crystal, crystal_to_sequence
 
 def readjust_alignments_to_crystal_sequence(pdb_chain_obj, query_alignment, hit_alignment, hit_start, hit_end):
+    """
+        Expand local alignments to the full gapped crystal-sequence frame.
+    
+        Args:
+            pdb_chain_obj (ChainOfProtein): Template protein chain object.
+            query_alignment (str): Query alignment segment.
+            hit_alignment (str): Template alignment segment.
+            hit_start (int): Start position in crystal sequence coordinates.
+            hit_end (int): End position in crystal sequence coordinates.
+    
+        Returns:
+            tuple: `(sequence_alignment, structure_alignment)` in full-chain frame.
+    
+    Args:
+        pdb_chain_obj (Any): PDB structure identifier and chain selector.
+        query_alignment (Any): Value used by this routine.
+        hit_alignment (Any): Value used by this routine.
+        hit_start (Any): Value used by this routine.
+        hit_end (Any): Value used by this routine."""
     # Initialize #
     sequence_alignment = "-" * len(pdb_chain_obj.gapped_protein_sequence[:hit_start - 1]) + query_alignment + "-" * len(pdb_chain_obj.gapped_protein_sequence[hit_end:])
     structure_alignment = pdb_chain_obj.gapped_protein_sequence[:hit_start - 1] + hit_alignment + pdb_chain_obj.gapped_protein_sequence[hit_end:]
@@ -1338,6 +1627,27 @@ def readjust_alignments_to_crystal_sequence(pdb_chain_obj, query_alignment, hit_
     return sequence_alignment, structure_alignment
 
 def get_protein_models(pir_alignment_obj, pdb_dir,  n=1, dummy_dir="/tmp/", verbose=False, optimization=False):
+    """
+        Run Modeller for one PIR alignment and collect accepted PDB models.
+    
+        Args:
+            pir_alignment_obj (PirAlignment): PIR alignment object to model.
+            pdb_dir (str): PDB resource directory containing templates.
+            n (int, optional): Number of models to generate.
+            dummy_dir (str, optional): Temporary directory root.
+            verbose (bool, optional): Enable verbose logs.
+            optimization (bool, optional): Enable expensive optimization mode.
+    
+        Returns:
+            list: Modeled structures as `PDB` objects.
+    
+    Args:
+        pir_alignment_obj (Any): Value used by this routine.
+        pdb_dir (Any): Directory path used by this operation.
+        n (Any): Index or identifier value.
+        dummy_dir (Any): Directory path used by this operation.
+        verbose (Any): Boolean flag controlling routine behavior.
+        optimization (Any): Value used by this routine."""
 
     # Initialize #
     models = []
@@ -1407,8 +1717,8 @@ def get_protein_models(pir_alignment_obj, pdb_dir,  n=1, dummy_dir="/tmp/", verb
     if  verbose: sys.stdout.write("\t\t\t-- %s\n"%(os.path.join(modeller_path, "modpy.sh") + " " + python + " " + os.path.join(modpy_path, "simpleModel.py") + " --pir=" + pir_file + " --models=" + str(n) + " -v " + " --out " + dummy_name + flags))
     try:
       os.system(os.path.join(modeller_path, "modpy.sh") + " " + python + " " + os.path.join(modpy_path, "simpleModel.py") + " --pir=" + pir_file + " --models=" + str(n) + " -v " + " --out " + dummy_name + flags)
-    except Exceptions as e:
-      raise "Error on modeling %s"
+    except Exception as e:
+      raise ValueError("Error on modeling %s" % dummy_name)
     # For each model... #
     for pdb_file in os.listdir("."):
         # If model PDB file... #
@@ -1455,6 +1765,19 @@ def get_protein_models(pir_alignment_obj, pdb_dir,  n=1, dummy_dir="/tmp/", verb
     return [i[-1] for i in models]
 
 def get_identities(A, B):
+    """
+        Count identity matches between two aligned sequences.
+    
+        Args:
+            A (str): First aligned sequence.
+            B (str): Second aligned sequence.
+    
+        Returns:
+            int: Number of aligned identical residues.
+    
+    Args:
+        A (Any): Value used by this routine.
+        B (Any): Value used by this routine."""
 
     # Initialize #
     identities = 0
@@ -1467,6 +1790,19 @@ def get_identities(A, B):
     return identities
 
 def get_aligned_residues(A, B):
+    """
+        Count aligned residue positions excluding gaps and unknown `x` symbols.
+    
+        Args:
+            A (str): First aligned sequence.
+            B (str): Second aligned sequence.
+    
+        Returns:
+            float: Number of comparable aligned residues.
+    
+    Args:
+        A (Any): Value used by this routine.
+        B (Any): Value used by this routine."""
 
     # Initialize #
     aligned_residues = 0.0001
@@ -1479,6 +1815,17 @@ def get_aligned_residues(A, B):
     return aligned_residues
 
 def get_sequence_residues(sequence):
+    """
+        Count sequence residues excluding unknown `x` symbols.
+    
+        Args:
+            sequence (str): Sequence string.
+    
+        Returns:
+            float: Number of valid residue positions.
+    
+    Args:
+        sequence (Any): Sequence/alignment content used in this step."""
 
     # Initialize #
     residues = 0.0001
@@ -1492,15 +1839,16 @@ def get_sequence_residues(sequence):
 
 def get_non_overlapping_pir_alignments(alignments_list):
     """
-    This function returns a non-overlapping list of PIR alignments. 
-
-    @input:
-    alignments_list {list} of {PirAlignment} objects
-
-    @return:
-    non_overlapping_alignments_list {list} of non-overlapping {PirAlignment} objects
+        Select a subset of PIR alignments with limited sequence overlap.
     
-    """
+        Args:
+            alignments_list (list): Candidate `PirAlignment` objects.
+    
+        Returns:
+            list: Non-overlapping `PirAlignment` objects.
+    
+    Args:
+        alignments_list (Any): Value used by this routine."""
 
     # Initialize #
     non_overlapping_alignments_list = []
@@ -1531,10 +1879,16 @@ def get_non_overlapping_pir_alignments(alignments_list):
 
 def  get_pir_alignments_from_pdb(input_file):
     """
-    This function gets and input pdb file and 
-    returns a list of {PirAlignment}.
-
-    """
+        Build PIR alignment objects directly from an input PDB structure.
+    
+        Args:
+            input_file (str): Input PDB file path.
+    
+        Returns:
+            list: `PirAlignment` objects inferred from PDB chains.
+    
+    Args:
+        input_file (Any): Path to the input/output file."""
     pir_alignments_list = []
     pdb_obj    = PDB(input_file)
     pdb_name   = os.path.basename(input_file).rstrip(".pdb")
@@ -1592,10 +1946,16 @@ def  get_pir_alignments_from_pdb(input_file):
 
 def get_kmer_thread_from_threads(threading_files):
     """
-    This function gets a kmer of one of the threading_files if all threading_files have the same, otherwise is None
-
-        kmers_thread    = thread_object.get_kmers_fixed()
-    """
+        Extract shared fixed-kmer constraints across multiple threading files.
+    
+        Args:
+            threading_files (list): Threading file paths.
+    
+        Returns:
+            dict or None: Shared fixed-kmer map if all files agree, else None.
+    
+    Args:
+        threading_files (Any): Value used by this routine."""
     kmers_thread = None
     done=False
     try:
@@ -1616,10 +1976,22 @@ def get_kmer_thread_from_threads(threading_files):
 
 def get_pir_alignments_from_threads(threading_files,pdb_dir,hit_name_pdb,label_chain):
     """
-    This function gets a list of threads (more than one if a complex) and it 
-    returns a list of {PirAlignment}.
-
-    """
+        Build PIR alignments from one or multiple threading results.
+    
+        Args:
+            threading_files (list): Threading file paths (possibly complex chains).
+            pdb_dir (str): PDB resource directory.
+            hit_name_pdb (str): Template PDB code.
+            label_chain (str): Combined chain label for complex templates.
+    
+        Returns:
+            list: `PirAlignment` objects generated from threading alignments.
+    
+    Args:
+        threading_files (Any): Value used by this routine.
+        pdb_dir (Any): Directory path used by this operation.
+        hit_name_pdb (Any): Value used by this routine.
+        label_chain (Any): Chain identifier."""
     pir_alignments_list=[]
     try:
          #First get the structure of the full PDB template
@@ -1725,6 +2097,21 @@ def get_pir_alignments_from_threads(threading_files,pdb_dir,hit_name_pdb,label_c
 #-------------#
 
 if __name__ == "__main__":
+    """
+    Run the command-line protein-modeling workflow.
+
+    Workflow:
+        1. Parse command-line options and validate required resources.
+        2. Build PIR alignments from FASTA/threading/structure inputs.
+        3. Run Modeller-based template modeling and optional DNA remodeling.
+        4. Write output models and update execution logs.
+
+    Args:
+        None.
+
+    Returns:
+        None. Modeled structures and logs are written to disk.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -2128,7 +2515,7 @@ if __name__ == "__main__":
                               if len(pdb_renumber.chain_identifiers)>1:
                                   pdb_renumber.write(pdb_file,force=True)
                               else:
-                                  if verbose: sys.stdout.write("\t\t\t-- Failed to renumerate %s\n"%output_file)
+                                  if options.verbose: sys.stdout.write("\t\t\t-- Failed to renumerate %s\n"%output_file)
                            except Exception as e:
                               if options.verbose: sys.stdout.write("\t\t\t-- Failed to renumerate %s\n"%output_file)
                               if options.verbose: sys.stderr.write("\t\t\t-- Error while renumbering %s\n"%str(repr(e)))

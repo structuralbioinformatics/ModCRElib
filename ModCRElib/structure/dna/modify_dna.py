@@ -66,8 +66,13 @@ for x in alphabet:
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for DNA remodeling/extension workflows.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for input/output and modeling setup.
 
     """
 
@@ -90,10 +95,24 @@ def parse_options():
 
 def dna_superimposition_obj(pdb_obj_static, pdb_obj_mobile, extension,  dummy_dir="/tmp", verbose=False):
     """
-    pdb_obj_static is the PDB object of a long DNA
-    pdb_obj_mobile is the PDB object of the TF plus DNA to superimpose on static
-    extension is the number of bp extending at both 5' and 3' sides of the mobile DNA
-    """
+        Superimpose a mobile TF-DNA complex onto a static DNA scaffold.
+    
+        Args:
+            pdb_obj_static (PDB): Static DNA-rich structure used as alignment target.
+            pdb_obj_mobile (PDB): Mobile protein-DNA structure to superimpose.
+            extension (int): Number of basepairs added to each DNA end.
+            dummy_dir (str, optional): Temporary directory root.
+            verbose (bool, optional): Enable verbose logging.
+    
+        Returns:
+            PDB: Merged PDB object containing static DNA and superimposed proteins.
+    
+    Args:
+        pdb_obj_static (Any): Value used by this routine.
+        pdb_obj_mobile (Any): Value used by this routine.
+        extension (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation.
+        verbose (Any): Boolean flag controlling routine behavior."""
 
     # Initialize #
 
@@ -219,6 +238,19 @@ def dna_superimposition_obj(pdb_obj_static, pdb_obj_mobile, extension,  dummy_di
     return pdb_obj
 
 def merge_dna(a,b):
+   """
+      Merge two DNA fragments into canonical `A`/`B` nucleotide chains.
+   
+      Args:
+          a (PDB): First DNA fragment object.
+          b (PDB): Second DNA fragment object.
+   
+      Returns:
+          PDB: Combined DNA PDB object with renumbered residues.
+   
+   Args:
+       a (Any): Value used by this routine.
+       b (Any): Value used by this routine."""
    a_chains=[]
    for c in a.chains:
     identifier = c.chain
@@ -279,6 +311,27 @@ def merge_dna(a,b):
    return p
 
 def remodel_dna_obj(dna_str,sequence,extension, nucleotide_extend,dummy_dir="/tmp", verbose=False):
+    """
+        Build a remodeled DNA-only structure with symmetric sequence extension.
+    
+        Args:
+            dna_str (str): DNA conformation code (`A`, `B`, `C`, `D`, `Z`).
+            sequence (str): Core DNA sequence to preserve.
+            extension (int): Number of nucleotides to add at both ends.
+            nucleotide_extend (str): Filler nucleotide used in extensions.
+            dummy_dir (str, optional): Temporary directory root.
+            verbose (bool, optional): Enable verbose logging.
+    
+        Returns:
+            PDB: Remodeled DNA structure as PDB object.
+    
+    Args:
+        dna_str (Any): DNA identifier, sequence, or DNA-related data.
+        sequence (Any): Sequence/alignment content used in this step.
+        extension (Any): Value used by this routine.
+        nucleotide_extend (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation.
+        verbose (Any): Boolean flag controlling routine behavior."""
 
     try:
         # Initialize #
@@ -340,6 +393,29 @@ def remodel_dna_obj(dna_str,sequence,extension, nucleotide_extend,dummy_dir="/tm
 
 
 def extended_dna_obj(dna_str, extension, nucleotide_extend, nucleotide, position,  dummy_dir="/tmp", verbose=False):
+    """
+        Build one 5' or 3' DNA extension fragment and orient it to a reference frame.
+    
+        Args:
+            dna_str (str): DNA conformation code (`A`, `B`, `C`, `D`, `Z`).
+            extension (int): Extension length in nucleotides.
+            nucleotide_extend (str): Filler nucleotide for extension segment.
+            nucleotide (str): Terminal nucleotide used at extension edge.
+            position (str): Extension side (`5'` or `3'`).
+            dummy_dir (str, optional): Temporary directory root.
+            verbose (bool, optional): Enable verbose logging.
+    
+        Returns:
+            PDB: Oriented extension fragment as PDB object.
+    
+    Args:
+        dna_str (Any): DNA identifier, sequence, or DNA-related data.
+        extension (Any): Value used by this routine.
+        nucleotide_extend (Any): Value used by this routine.
+        nucleotide (Any): Value used by this routine.
+        position (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation.
+        verbose (Any): Boolean flag controlling routine behavior."""
 
     try:
         # Initialize #
@@ -417,16 +493,24 @@ def extended_dna_obj(dna_str, extension, nucleotide_extend, nucleotide, position
 
 def get_reference_frame(pdb_file,offset=1, label=None, dummy_dir="/tmp",verbose=False):
     """
-    This function executes "find_pair" from X3DNA package and returns a {X3DNA}.
-
-    @input:
-    pdb_file {string}
-    dummy_dir {string}
-
-    @return:
-    pdb_obj {re-oriented frame}
-
-    """
+        Build a DNA reference frame using X3DNA `find_pair` and `frame_mol`.
+    
+        Args:
+            pdb_file (str): Input PDB file path.
+            offset (int, optional): Basepair offset used by `frame_mol`.
+            label (str, optional): Prefix for generated reference-frame files.
+            dummy_dir (str, optional): Temporary directory root.
+            verbose (bool, optional): Enable verbose logging.
+    
+        Returns:
+            PDB: Re-oriented PDB object in the selected reference frame.
+    
+    Args:
+        pdb_file (Any): Path to the input/output file.
+        offset (Any): Value used by this routine.
+        label (Any): Name/identifier used by this routine.
+        dummy_dir (Any): Directory path used by this operation.
+        verbose (Any): Boolean flag controlling routine behavior."""
     try:
         # Initialize #
         src_path = config.get("Paths", "src_path")
@@ -463,6 +547,31 @@ def get_reference_frame(pdb_file,offset=1, label=None, dummy_dir="/tmp",verbose=
 
 
 def modify_dna(pdb_file, output_file, dna_str, extension, nucleotide, extend, dummy_dir, verbose):
+    """
+        Remodel or extend DNA in a complex and superimpose original proteins.
+    
+        Args:
+            pdb_file (str): Input PDB file path.
+            output_file (str): Output PDB path.
+            dna_str (str): DNA conformation code (`A`, `B`, `C`, `D`, `Z`).
+            extension (int): Number of nucleotides/basepairs to extend.
+            nucleotide (str): Filler nucleotide used for extension/remodeling.
+            extend (bool): If True, extend DNA; otherwise remodel in-place.
+            dummy_dir (str): Temporary directory root.
+            verbose (bool): Enable verbose logging.
+    
+        Returns:
+            None. The modified structure is written to `output_file`.
+    
+    Args:
+        pdb_file (Any): Path to the input/output file.
+        output_file (Any): Path to the input/output file.
+        dna_str (Any): DNA identifier, sequence, or DNA-related data.
+        extension (Any): Value used by this routine.
+        nucleotide (Any): Value used by this routine.
+        extend (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation.
+        verbose (Any): Boolean flag controlling routine behavior."""
 
     #Get DNA chains and DNA sequence forward
     pdb_obj=PDB(pdb_file)
@@ -516,11 +625,22 @@ def modify_dna(pdb_file, output_file, dna_str, extension, nucleotide, extend, du
 
 
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line DNA modification workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options.
+        2. Resolve input as one PDB file or a folder of PDB files.
+        3. Remodel/extend DNA and superimpose proteins for each input.
+        4. Write output PDB files.
+
+    Args:
+        None.
+
+    Returns:
+        None. Modified PDB files are written to disk.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -563,3 +683,11 @@ if __name__ == "__main__":
              print(("Error %s"%e))
 
     print("Done")
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()

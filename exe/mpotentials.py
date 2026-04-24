@@ -53,11 +53,37 @@ ratio =  1.0
 
 class Potentials(object):
     """
-    This class defines a {Potentials} object.
-    
+    Hold and query statistical potential tables loaded from disk.
+
+    The object stores multiple PMF variants and the corresponding distance bins
+    used to index per-distance scores.
+
+    Object features:
+        - Serialized source path and optional selective-loading mode
+          (`_file`, `_potential`).
+        - Distance-dependent PMF tables for global and context-aware models
+          (`_pmf_3d`, `_pmf_3dc`, `_pmf_s3dc`, `_pmf_s3dc_dd`, `_pmf_pair`).
+        - Single-value/context PMF tables for local and distance-independent
+          variants (`_pmf_local`, `_pmf_s3dc_di`).
+        - Distance-bin index map used to convert raw distances into PMF-array
+          positions (`_distances`).
+        - Accessors that resolve distance bins and return potential values for
+          requested keys/potential families.
+        - Serialization helper to write the complete PMF state back to disk.
     """
 
     def __init__(self, file_name=None, select_potential=None):
+        """
+        Build a potentials container and optionally load it from a file.
+
+        Args:
+            file_name (str, optional): Path to a serialized potentials file.
+            select_potential (str, optional): Name of a specific potential to
+            load (for example ``3d`` or ``s3dc``), or ``all``.
+
+        Returns:
+            None.
+        """
         self._file = file_name
         self._pmf_3d = None
         self._pmf_3dc = None
@@ -73,6 +99,12 @@ class Potentials(object):
             self._parse_file()
 
     def _parse_file(self):
+        """
+        Parse a serialized potentials file into in-memory PMF structures.
+
+        Returns:
+            None.
+        """
         for line in functions.parse_file(self._file):
             potential, json_obj = line.strip("\n").split("\t")
             if self._potential is None or self._potential=="all" or self._potential == potential[4:]:
@@ -96,6 +128,15 @@ class Potentials(object):
                     self._distances[distances[position]] = position
 
     def _get_distance(self, distance):
+        """
+        Return the first stored distance bin upper bound above a value.
+
+        Args:
+            distance (float): Query distance in angstroms.
+
+        Returns:
+            float or None: Matching bin edge, or ``None`` if out of range.
+        """
         for d in self._distances:
             if distance < d:
                 return d
@@ -103,13 +144,33 @@ class Potentials(object):
         return None
 
     def _get_distance_position(self, distance):
+        """
+        Get the index position associated with a distance bin edge.
+
+        Args:
+            distance (float): Distance bin edge value.
+
+        Returns:
+            int or None: Position in PMF vectors, or ``None`` if not present.
+        """
         if distance in self._distances:
             return self._distances[distance]
 
         return None
 
     def get_score(self, potential, key=None, distance=None):
-        
+        """
+        Retrieve a potential score for a key and distance.
+
+        Args:
+            potential (str): Potential type (``3d``, ``3dc``, ``s3dc``,
+            ``s3dc_dd``, ``s3dc_di``, ``local``, or ``pair``).
+            key (str, optional): Residue/environment key used by keyed PMFs.
+            distance (float, optional): Query distance used to select a bin.
+
+        Returns:
+            float or None: Score value if available; otherwise ``None``.
+        """
         distance = numpy.floor(self._get_distance(distance))
         position = self._get_distance_position(distance)
         try:
@@ -138,6 +199,15 @@ class Potentials(object):
           return None
 
     def write(self, file_name):
+        """
+        Write all stored PMF tables and distance bins to disk.
+
+        Args:
+            file_name (str): Output file path.
+
+        Returns:
+            None.
+        """
         functions.write(file_name, "pmf_3d\t%s" % json.dumps(self._pmf_3d, separators=(",", ":")))
         functions.write(file_name, "pmf_3dc\t%s" % json.dumps(self._pmf_3dc, separators=(",", ":")))
         functions.write(file_name, "pmf_s3dc\t%s" % json.dumps(self._pmf_s3dc, separators=(",", ":")))
@@ -153,9 +223,15 @@ class Potentials(object):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for methylation-aware potential generation.
 
+    The parser configures the triad manifest to process, output destination,
+    and optional post-processing steps (Taylor approximation, smoothing,
+    Z-scoring, and binning mode).
+
+    Returns:
+        optparse.Values: Parsed CLI options describing input/output paths and
+        potential-computation behavior.
     """
 
     parser = optparse.OptionParser("python spotentials.py -i input_file [-a --dummy=dummy_dir -o output_file -s -v -z -b]")
@@ -178,14 +254,21 @@ def parse_options():
 
 def get_statistical_potentials(file_name, approach=False, smooth=False, zscores=False, computation=False, dummy_dir="/tmp"):
     """
-    This functions derives statistical potentials from a list of triads
-    files.
+    Derive statistical PMFs from triad-contact input files.
 
-    @input:
-    file_name {filename} full path to triads files
+    Args:
+        file_name (str): File listing triad files to aggregate.
+        approach (bool, optional): Apply Taylor-like amino-acid transition
+        approximation to fill sparse entries.
+        smooth (bool, optional): Smooth PMFs by local bin averaging.
+        zscores (bool, optional): Convert PMFs to per-context Z-scores.
+        computation (bool, optional): Use binned mode instead of cumulative
+        mode for frequency counting.
+        dummy_dir (str, optional): Unused compatibility argument.
 
-    @return:
-
+    Returns:
+        tuple: ``(pmf_3d, pmf_3dc, pmf_s3dc, pmf_s3dc_dd, pmf_s3dc_di,
+        pmf_local, pmf_pair, distances)``.
     """
 
     # Initialize #
@@ -325,21 +408,18 @@ def get_statistical_potentials(file_name, approach=False, smooth=False, zscores=
 
 def get_frequencies(file_name, computation=False, approach=False):
     """
-    This function extracts the different frequencies to calculate the
-    statistical potentials: i.e. "f_dab", "f_a_dab", "f_a_dab_oa", "f_a_b_dab",
-    "f_dab_oa_ob" and "f_a_b_dab_oa_ob".
+    Extract frequency tables required to compute all statistical PMFs.
 
-    @input:
-    file_name {filename}
+    Args:
+        file_name (str): File listing triad files to parse.
+        computation (bool, optional): Use discrete bins (True) or cumulative
+        counting (False).
+        approach (bool, optional): Initialize extra amino-acid substitutions
+        for Taylor-like approximation.
 
-    @return:
-    f_dab {list}
-    f_a_dab {dict}
-    f_a_dab_oa {dict}
-    f_a_b_dab {dict}
-    f_dab_oa_ob {dict}
-    f_a_b_dab_oa_ob {dict}
-
+    Returns:
+        tuple: ``(f_dab, f_a_dab, f_a_dab_oa, f_a_b_dab, f_dab_oa_ob,
+        f_a_b_dab_oa_ob)`` frequency structures.
     """
 
     # Initialize #
@@ -471,8 +551,14 @@ def get_frequencies(file_name, computation=False, approach=False):
 
 def adjust_distance_to_bin(distance,bin_distance):
     """
-    This function adjusts distance to best bin.
-    
+    Snap a raw distance to the lower edge of its bin.
+
+    Args:
+        distance (float): Input distance.
+        bin_distance (float): Width of each distance bin.
+
+    Returns:
+        float: Bin-aligned distance value.
     """
 
     # Initialize #
@@ -486,6 +572,18 @@ def adjust_distance_to_bin(distance,bin_distance):
 
 
 def approach_pmf(a_b_oa_ob, pmf, symbol):
+    """
+    Estimate missing PMF values with amino-acid transition probabilities.
+
+    Args:
+        a_b_oa_ob (str): Residue/environment key to approach.
+        pmf (dict): PMF table keyed by residue/environment pair.
+        symbol (str): ``"+"`` for attractive terms, ``"-"`` for repulsive
+        terms in the approximation formula.
+
+    Returns:
+        list: Approached PMF profile for the requested key.
+    """
 
     # Initialize #
     kB = 8.31441e-3 # Boltzmann constant
@@ -577,9 +675,14 @@ def approach_pmf(a_b_oa_ob, pmf, symbol):
 
 def get_transition_probability(A, B):
     """
-    This function returns the transition probability of an amino acid "A"
-    to an amino acid "B" (according to BLOSUM62 scoring matrix).
-    
+    Compute transition weight between two amino acids using BLOSUM62.
+
+    Args:
+        A (str): Source amino acid in 3-letter code.
+        B (str): Target amino acid in 3-letter code.
+
+    Returns:
+        float: Frequency-weighted transition probability-like score.
     """
     
     l = 0.347
@@ -611,9 +714,15 @@ def get_transition_probability(A, B):
 
 def smooth_bin(array, position, n):
     """
-    This function smooths a given potential PMF bin by averaging it with
-    the PMFs from the bins around +/- "n" positions.
-    
+    Smooth one PMF bin by averaging values in a local window.
+
+    Args:
+        array (list): PMF values along distance bins.
+        position (int): Index of the bin to smooth.
+        n (int): Number of bins to include on each side.
+
+    Returns:
+        float or None: Local mean ignoring ``None`` entries.
     """
 
     values = []
@@ -627,6 +736,18 @@ def smooth_bin(array, position, n):
        return None
 
 def calculate_zscores(pmf, pmf_name, bin_distance):
+    """
+    Convert PMF values into Z-scores within comparable amino-acid contexts.
+
+    Args:
+        pmf (dict): Potential table to standardize.
+        pmf_name (str): Potential family name (for example ``pmf_3dc`` or
+        ``pmf_pair``) controlling grouping logic.
+        bin_distance (float): Distance-bin width used to rebuild bin indices.
+
+    Returns:
+        dict or None: Z-scored PMF table, or ``None`` for unknown PMF names.
+    """
 
     # Initialize #
     zpmf = {}
@@ -752,12 +873,19 @@ def calculate_zscores(pmf, pmf_name, bin_distance):
 
     return None
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the methylation-aware statistical-potential generation workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse runtime options and resolve absolute input/output paths.
+        2. Read the triad manifest and compute all PMF potential families.
+        3. Populate a :class:`Potentials` container with the computed tables.
+        4. Serialize the resulting potentials to file or print them to stdout.
 
+    Returns:
+        None. Potentials are written to disk or emitted to standard output.
+    """
     # Arguments & Options #
     options = parse_options()
 
@@ -788,4 +916,12 @@ if __name__ == "__main__":
         sys.stdout.write("pmf_local\t%s\n" % json.dumps(potentials_obj._pmf_local, separators=(",", ":")))
         sys.stdout.write("pmf_pair\t%s\n" % json.dumps(potentials_obj._pmf_pair, separators=(",", ":")))
         sys.stdout.write("distances\t%s\n" % json.dumps(potentials_obj._distances, separators=(",", ":")))
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 

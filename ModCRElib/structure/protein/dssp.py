@@ -35,11 +35,31 @@ from ModCRElib.beans import functions
 
 class DSSP(object):
     """
-    This class defines a {DSSP} object.
+    Parse and store per-residue DSSP accessibility and secondary structure.
 
+    Object features:
+        - Caches raw DSSP file lines in `_file_content` for round-trip writing.
+        - Stores residue annotations in `_residues` keyed by
+          `(pdb_chain, residue_number)`.
+        - Exposes residue-level getters for:
+            - accessible surface area (`get_accessible_surface_area`)
+            - secondary-structure code (`get_secondary_structure`)
+        - Supports residue presence checks (`has_residue`) and full dictionary
+          retrieval (`get_dictionary_of_residues`).
     """
 
     def __init__(self, file_name):
+        """
+                Initialize a DSSP container from a DSSP output file.
+        
+                Args:
+                    file_name (str): Path to a DSSP output file.
+        
+                Returns:
+                    None.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         self._file = file_name
         self._file_content = []
         self._residues = {}
@@ -47,6 +67,7 @@ class DSSP(object):
         self._parse_file()
 
     def _parse_file(self):
+        """Parse DSSP rows and cache relevant residue-level annotations."""
         for line in functions.parse_file(self._file):
             if not line.endswith(".") and "#" not in line and line != "":
                 m = re.search("(\d+)\s\S\s[ACDEFGHIKLMNPQRSTVWY]", line)
@@ -62,6 +83,11 @@ class DSSP(object):
                self._file_content.append(line)
 
     def has_residue(self, pdb_chain, residue_num):
+        """Return whether DSSP data exists for a residue.
+        
+        Args:
+            pdb_chain (Any): PDB structure identifier and chain selector.
+            residue_num (Any): Numeric identifier/index used by this routine."""
         if (pdb_chain, residue_num) in self._residues:
             return True
 
@@ -69,22 +95,37 @@ class DSSP(object):
             
 
     def get_dictionary_of_residues(self):
+        """Return all parsed residue annotations."""
         return copy.copy(self._residues)
 
 
     def get_accessible_surface_area(self, pdb_chain, residue_num):
+        """Return DSSP accessible-surface area for one residue.
+        
+        Args:
+            pdb_chain (Any): PDB structure identifier and chain selector.
+            residue_num (Any): Numeric identifier/index used by this routine."""
         if self.has_residue(pdb_chain, residue_num):
             return copy.copy(self._residues[(pdb_chain, residue_num)][0])
 
         return None
 
     def get_secondary_structure(self, pdb_chain, residue_num):
+        """Return DSSP secondary-structure code for one residue.
+        
+        Args:
+            pdb_chain (Any): PDB structure identifier and chain selector.
+            residue_num (Any): Numeric identifier/index used by this routine."""
         if self.has_residue(pdb_chain, residue_num):
             return copy.copy(self._residues[(pdb_chain, residue_num)][1])
 
         return None
 
     def write(self, file_name):
+        """Write cached DSSP output lines to file.
+        
+        Args:
+            file_name (Any): Value used by this routine."""
         for line in self._file_content:
             functions.write(file_name, line)
 
@@ -94,12 +135,17 @@ class DSSP(object):
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for DSSP annotation extraction.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for input, output, and dummy paths.
 
     """
 
-    parser = optparse.OptionParser("python dssp.py -i input_file [--dummy=dummy_dir -o output_file]")
+    parser = optparse.OptionParser("python dssp.py -i INPUT_FILE [--dummy DUMMY_DIR -o OUTPUT_FILE]")
 
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
     parser.add_option("-i", action="store", type="string", dest="input_file", help="Input file (in PDB format)", metavar="{filename}")
@@ -114,16 +160,18 @@ def parse_options():
 
 def get_dssp_obj(pdb_file, dummy_dir="/tmp"):
     """
-    This function executes "find_pair" from X3DNA package and returns a {X3DNA}.
-
-    @input:
-    pdb_file {string}
-    dummy_dir {string}
-
-    @return:
-    x3dna_obj {X3DNA}
-
-    """
+        Run DSSP on a PDB file and parse results into a `DSSP` object.
+    
+        Args:
+            pdb_file (str): Input PDB file path.
+            dummy_dir (str, optional): Temporary working directory root.
+    
+        Returns:
+            DSSP: Parsed DSSP object.
+    
+    Args:
+        pdb_file (Any): Path to the input/output file.
+        dummy_dir (Any): Directory path used by this operation."""
 
     try:
         # Initialize #
@@ -143,11 +191,21 @@ def get_dssp_obj(pdb_file, dummy_dir="/tmp"):
 
     return dssp_obj
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line DSSP workflow.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options.
+        2. Execute DSSP for the input PDB.
+        3. Write DSSP output to file or stdout.
+
+    Args:
+        None.
+
+    Returns:
+        None. DSSP output lines are written to file or stdout.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -161,3 +219,11 @@ if __name__ == "__main__":
     else:
         for line in dssp_obj._file_content:
             sys.stdout.write("%s\n" % line)
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()

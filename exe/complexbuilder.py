@@ -41,6 +41,19 @@ aminoacids = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
                             ##### Function zone #####
 def make_paired_chains(namemap,exact_dimers):
+      """
+            Build chain-pair mappings for dimers detected across selected models.
+      
+            Args:
+                namemap (dict): Mapping of temporary chain labels to source file paths.
+                exact_dimers (dict): Mapping of model codes to exact dimer partners.
+      
+            Returns:
+                set: Pairs of chain labels that should be treated as dimers.
+      
+      Args:
+          namemap (Any): Value used by this routine.
+          exact_dimers (Any): Value used by this routine."""
       for p in exact_dimers.keys():
          pairing = False
          for name in namemap.keys():
@@ -55,6 +68,31 @@ def make_paired_chains(namemap,exact_dimers):
       return paired_chains
 
 def make_dimers_list(index,namemap,filelist,added_proteins,selected,conformers,dimers,args):
+      """
+            Populate file lists with selected dimer-compatible structures.
+      
+            Args:
+                index (int): Current index into the generated chain-label alphabet.
+                namemap (dict): Mapping of generated chain labels to structure files.
+                filelist (list): Ordered list of selected structure file paths.
+                added_proteins (list): Protein model codes already added.
+                selected (dict): Preferred template PDB per `(protein, binding)` key.
+                conformers (dict): Available conformer chains per selected template.
+                dimers (dict): Dimer relationships between candidate model codes.
+                args (dict): Parsed command-line arguments.
+      
+            Returns:
+                tuple: Updated `(index, namemap, filelist, added_proteins)`.
+      
+      Args:
+          index (Any): Value used by this routine.
+          namemap (Any): Value used by this routine.
+          filelist (Any): Value used by this routine.
+          added_proteins (Any): Protein identifier, object, or protein-related data.
+          selected (Any): Value used by this routine.
+          conformers (Any): Value used by this routine.
+          dimers (Any): Value used by this routine.
+          args (Any): Value used by this routine."""
 
       for file in os.listdir(args["folder"]):
 
@@ -213,6 +251,31 @@ def make_dimers_list(index,namemap,filelist,added_proteins,selected,conformers,d
       return index,namemap,filelist,added_proteins
 
 def make_monomers_list(index,namemap,filelist,added_proteins,selected,conformers,dimers,args):
+      """
+            Populate file lists with selected monomer structures.
+      
+            Args:
+                index (int): Current index into the generated chain-label alphabet.
+                namemap (dict): Mapping of generated chain labels to structure files.
+                filelist (list): Ordered list of selected structure file paths.
+                added_proteins (list): Protein model codes already added.
+                selected (dict): Preferred template PDB per `(protein, binding)` key.
+                conformers (dict): Available conformer chains per selected template.
+                dimers (dict): Dimer relationships between candidate model codes.
+                args (dict): Parsed command-line arguments.
+      
+            Returns:
+                tuple: Updated `(index, namemap, filelist, added_proteins)`.
+      
+      Args:
+          index (Any): Value used by this routine.
+          namemap (Any): Value used by this routine.
+          filelist (Any): Value used by this routine.
+          added_proteins (Any): Protein identifier, object, or protein-related data.
+          selected (Any): Value used by this routine.
+          conformers (Any): Value used by this routine.
+          dimers (Any): Value used by this routine.
+          args (Any): Value used by this routine."""
 
       for file in os.listdir(args["folder"]):
 
@@ -378,6 +441,17 @@ def make_monomers_list(index,namemap,filelist,added_proteins,selected,conformers
 
 
 def extract_dimers(args):
+      """
+            Read ortholog metadata and identify putative dimer relationships.
+      
+            Args:
+                args (dict): Parsed command-line arguments.
+      
+            Returns:
+                tuple: `(exact_dimers, dimers)` dictionaries describing dimer pairs.
+      
+      Args:
+          args (Any): Value used by this routine."""
       potential_dimers={}
       predimers={}
       exact_dimers={}
@@ -463,6 +537,22 @@ def extract_dimers(args):
 
 
 def create_dimers(selected,conformers,args):
+      """
+            Assemble explicit dimer codes from selected conformers.
+      
+            Args:
+                selected (dict): Preferred template PDB per `(protein, binding)` key.
+                conformers (dict): Available conformer chains per selected template.
+                args (dict): Parsed command-line arguments.
+      
+            Returns:
+                tuple: `(exact_dimers, dimers)` dictionaries derived from model files.
+      
+      Args:
+          selected (Any): Value used by this routine.
+          conformers (Any): Value used by this routine.
+          args (Any): Value used by this routine."""
+      if True:
          potential_dimers={}
          dimers={}
          predimers={}
@@ -573,12 +663,14 @@ def create_dimers(selected,conformers,args):
          return exact_dimers,dimers
 
 def parse_arguments():  # This function passes the arguments given by the user.
-
     """
-    Parsing of arguments.
-    -d : Path to the folder with the PDB's Pairwise Interactions that conforms the Complex.
-    -output: Path to the folder where generate the output file complex.
-    -v: Activate the verbosity mode
+    Parse command-line options for building multi-chain complexes.
+
+    Args:
+        None.
+
+    Returns:
+        dict: Argument dictionary used by the complex-building workflow.
     """
 
     aparser = argparse.ArgumentParser(description='complexbuilder -d FOLDER -o OUTPUT_FOLDER [-maxit MAXIT]')
@@ -596,14 +688,21 @@ def parse_arguments():  # This function passes the arguments given by the user.
 
 def parse_file(file_name, gz=False):
     """
-    This function parses any file and yields lines one by one.
+        Yield lines from plain text or gzipped files.
     
-    @input:
-    file_name {string}
-    @return:
-    line {string}
-
-    """
+        Args:
+            file_name (str): Path to the input file.
+            gz (bool, optional): Whether the input file is gzip-compressed.
+    
+        Yields:
+            str: One stripped line at a time.
+    
+        Returns:
+            None.
+    
+    Args:
+        file_name (Any): Value used by this routine.
+        gz (Any): Value used by this routine."""
     import gzip
     if os.path.exists(file_name):
         # Initialize #
@@ -620,10 +719,17 @@ def parse_file(file_name, gz=False):
 
 
 def Get_fasta(chain): # This function converts an input BioPython chain of a protein into a fasta sequence (str)
-
     """
-    This function converts an input BioPython chain of a protein into a fasta sequence (str)
-    """
+        Convert a Biopython chain (or residue iterable) into a FASTA sequence.
+    
+        Args:
+            chain (iterable): Iterable of Biopython residue objects.
+    
+        Returns:
+            str: One-letter amino-acid sequence (unknown residues are skipped).
+    
+    Args:
+        chain (Any): Chain identifier."""
     sequence = ""
     for residue in chain:
         try:
@@ -633,16 +739,19 @@ def Get_fasta(chain): # This function converts an input BioPython chain of a pro
     return sequence
 
 def check_homology(fasta_1, fasta_2): # Check Homology between two fasta chains. Threshold = 55%
-   
     """
-    This function check the identity percentage between two chains, and returns True if they are homologous
-    or False if they are not. The threshold is currently at 70%.
-
-    @ Input - Fasta_1 : String of fasta sequence
-              Fasta_2 : String of fasta sequence
-
-    @ Output - Boolean variable indicating if sequence are homologous
-    """
+        Return whether two FASTA sequences satisfy the homology threshold.
+    
+        Args:
+            fasta_1 (str): First FASTA sequence.
+            fasta_2 (str): Second FASTA sequence.
+    
+        Returns:
+            bool: True when sequences are considered homologous.
+    
+    Args:
+        fasta_1 (Any): Value used by this routine.
+        fasta_2 (Any): Value used by this routine."""
 
     if fasta_1 in fasta_2 or fasta_2 in fasta_1:
         return True
@@ -652,6 +761,23 @@ def check_homology(fasta_1, fasta_2): # Check Homology between two fasta chains.
 
 
 def return_equal_chain(structure_1, structure_2, positions,marginal):
+    """
+        Find matching atom subsets in two structures for superposition.
+    
+        Args:
+            structure_1 (Structure): Reference Biopython structure.
+            structure_2 (Structure): Mobile Biopython structure tuple/object.
+            positions (tuple): DNA start/end positions used as anchor interval.
+            marginal (int): Allowed positional offset around anchor interval.
+    
+        Returns:
+            tuple: `(main_atoms_1, main_atoms_2)` or `(None, None)` if unmatched.
+    
+    Args:
+        structure_1 (Any): Value used by this routine.
+        structure_2 (Any): Value used by this routine.
+        positions (Any): Value used by this routine.
+        marginal (Any): Value used by this routine."""
 
     testing_positions=[(int(positions[0]),int(positions[1]))]
     for i in range(-marginal,marginal):
@@ -743,6 +869,29 @@ def return_equal_chain(structure_1, structure_2, positions,marginal):
     return (None, None)
 
 def check_clash(structure_complex, moved_chain,chain_2,positions,marginal,radius=5.0,skip_dna=True):
+    """
+        Check whether adding a moved chain causes steric clashes.
+    
+        Args:
+            structure_complex (Structure): Current complex structure.
+            moved_chain (Chain): Candidate chain to be inserted.
+            chain_2 (str): Label of the candidate chain/model.
+            positions (tuple): DNA start/end positions used for contextual checks.
+            marginal (int): Positional margin around the DNA fragment interval.
+            radius (float, optional): Distance cutoff for clash detection.
+            skip_dna (bool, optional): Ignore DNA chains while counting clashes.
+    
+        Returns:
+            bool: True when the insertion should be rejected due to clashes.
+    
+    Args:
+        structure_complex (Any): Value used by this routine.
+        moved_chain (Any): Chain identifier.
+        chain_2 (Any): Value used by this routine.
+        positions (Any): Value used by this routine.
+        marginal (Any): Value used by this routine.
+        radius (Any): Value used by this routine.
+        skip_dna (Any): DNA identifier, sequence, or DNA-related data."""
 
     from Bio.PDB.NeighborSearch import NeighborSearch
     moved_chain.get_parent().get_parent().id="MOBILE"
@@ -908,6 +1057,17 @@ def check_clash(structure_complex, moved_chain,chain_2,positions,marginal,radius
     return False
 
 def is_dna(chain):
+    """
+        Return whether a chain corresponds to nucleic acid residues.
+    
+        Args:
+            chain (Chain): Biopython chain object.
+    
+        Returns:
+            bool: True for DNA/RNA-like residue names, False otherwise.
+    
+    Args:
+        chain (Any): Chain identifier."""
     residues = chain.get_residues()
     for residue in residues:
         if residue.get_resname().strip() in ["DA", "DT", "DG", "DC", "DU"]:
@@ -916,6 +1076,29 @@ def is_dna(chain):
             return False
 
 def build_complex(structure_1, file_2, namemap, offset, marginal,radius=5.0,skip_dna=True): 
+    """
+        Superimpose and merge two structures into an expanded complex model.
+    
+        Args:
+            structure_1 (Structure): Current complex structure.
+            file_2 (str): Path to candidate structure file to add.
+            namemap (dict): Mapping of generated chain labels to source files.
+            offset (int): DNA index offset for fragment-local coordinates.
+            marginal (int): Margin for DNA-position matching.
+            radius (float, optional): Clash-detection radius.
+            skip_dna (bool, optional): Ignore DNA when evaluating clashes.
+    
+        Returns:
+            tuple: `(skip, structure)` where `skip` indicates failed insertion.
+    
+    Args:
+        structure_1 (Any): Value used by this routine.
+        file_2 (Any): Value used by this routine.
+        namemap (Any): Value used by this routine.
+        offset (Any): Value used by this routine.
+        marginal (Any): Value used by this routine.
+        radius (Any): Value used by this routine.
+        skip_dna (Any): DNA identifier, sequence, or DNA-related data."""
     
     #Get the potential new chain 
     letter = [i for i in namemap.keys() if namemap[i] == file_2][0]
@@ -992,6 +1175,33 @@ def build_complex(structure_1, file_2, namemap, offset, marginal,radius=5.0,skip
       return True, structure_1
 
 def recursive_build(structure, start_chain_ids, chainlist, complexname, args, namemap,output_fragment,radius=5.0,skip_dna=True):
+    """
+        Recursively add compatible chains to construct complex combinations.
+    
+        Args:
+            structure (Structure): Current partially assembled structure.
+            start_chain_ids (list): Chain ids present in the starting complex.
+            chainlist (list): Remaining chain labels to test.
+            complexname (str): Current output name token.
+            args (dict): Parsed command-line arguments.
+            namemap (dict): Mapping of chain labels to source file paths.
+            output_fragment (str): Output fragment folder label.
+            radius (float, optional): Clash-detection radius.
+            skip_dna (bool, optional): Ignore DNA when evaluating clashes.
+    
+        Returns:
+            str: Final/partial complex name or completion token (`"Done"`).
+    
+    Args:
+        structure (Any): Value used by this routine.
+        start_chain_ids (Any): Value used by this routine.
+        chainlist (Any): Value used by this routine.
+        complexname (Any): Value used by this routine.
+        args (Any): Value used by this routine.
+        namemap (Any): Value used by this routine.
+        output_fragment (Any): Fragment identifier or fragment interval.
+        radius (Any): Value used by this routine.
+        skip_dna (Any): DNA identifier, sequence, or DNA-related data."""
 
     # Check the number of iterations to stop the program
     global itnum
@@ -1237,7 +1447,6 @@ if __name__ == "__main__": # Main part of the program.
         if not file.endswith(".pdb"): continue
         #WARNING: the PDB files should always have a UNiprotAccession code of 6 characters followed by a '.'
         m=re.search("(\S+).(\S+)_(\S+).(\d+)-(\d+):(\d+):(\d+)_(\S+).pdb",file)
-        #m = re.search(r"MODEL_SP_(?P<protein>[A-Z0-9]+)_\S+:(?P<start>\d+):(?P<end>\d+)"r"_(?P<pdb>[A-Za-z0-9]+)_(?P<chain>[A-Za-z])_\d+_[A-Za-z]\.pdb",file)
         if m:
             start_model = int(m.group(6))
             end_model   = int(m.group(7))
@@ -1245,12 +1454,6 @@ if __name__ == "__main__": # Main part of the program.
             pdb         = m.group(2)
             chain       = m.group(3)
             binding     = "%d-%d"%(int(m.group(4)),int(m.group(5)))
-            #prot      = m["protein"]
-            #pdb          = m["pdb"]
-            #chain        = m["chain"]
-            #start_model  = int(m["start"])
-            #end_model    = int(m["end"])
-            #binding      = "1-2"   # default as requested
             conformers.setdefault((prot,pdb,binding),set()).add(chain)
             modelsize.setdefault((prot,pdb,binding),[]).append(end_model-start_model)
         else:

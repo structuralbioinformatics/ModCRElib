@@ -2,26 +2,6 @@ import sys,os
 import pandas as pd
 import json
 
-
-# Get scripts path (i.e. ".") #
-exe_path = os.path.abspath(os.path.dirname(__file__))
-if os.path.exists(os.path.join(exe_path,"..","ModCRElib")):
-   scripts_path = os.path.join(exe_path,"..")
-elif os.path.exists(os.path.join(exe_path,"..","..","ModCRElib")):
-   scripts_path = os.path.join(exe_path,"..","..")
-elif os.path.exists(os.path.join(exe_path,"..","..","..","ModCRElib")):
-   scripts_path = os.path.join(exe_path,"..","..","..")
-else:
-   scripts_path = os.path.join(exe_path)
-
-
-# Append scripts path to python path #
-sys.path.append(scripts_path)
-
-
-
-
-
 home      = sys.argv[1]
 fasta     = sys.argv[2]
 nonredun  = sys.argv[3]
@@ -36,11 +16,35 @@ scripts_path = os.path.join(home,"scripts")
 config_path  = os.path.join(scripts_path,"ModCRElib","configure")
 sys.path.append(scripts_path)
 
-databases_of_pwms={ 
+#databases_of_pwms={ 
+#                   "jaspar":os.path.join(home,"ExternalPWMs/jaspar_pwms"),
+#                   "cisbp":os.path.join(home,"ExternalPWMs/CisBP_pwms"),
+#                   "hocomoco":os.path.join(home,"ExternalPWMs/hocomoco_pwms")
+#                  }
+
+databases_of_pwms={
                    "jaspar":os.path.join(home,"jaspar/jaspar_2024/PWMS"),
                    "cisbp":os.path.join(home,"pbm/CisBP_2019/pwms"),
                    "hocomoco":os.path.join(home,"hocomoco/pwms")
                   }
+
+
+
+
+# Get scripts path (i.e. ".") #
+exe_path = os.path.abspath(os.path.dirname(__file__))
+if os.path.exists(os.path.join(exe_path,"..","ModCRElib")):
+   scripts_path = os.path.join(exe_path,"..")
+elif os.path.exists(os.path.join(exe_path,"..","..","ModCRElib")):
+   scripts_path = os.path.join(exe_path,"..","..")
+elif os.path.exists(os.path.join(exe_path,"..","..","..","ModCRElib")):
+   scripts_path = os.path.join(exe_path,"..","..","..")
+else:
+   scripts_path = os.path.join(exe_path)
+
+# Append scripts path to python path #
+sys.path.append(scripts_path)
+
 
 # Imports my functions #
 from ModCRElib.beans import functions
@@ -75,8 +79,6 @@ acc_nn={}
 tf_fam = pd.read_csv(families)
 tf_nn  = pd.read_csv(neighbors)
 
-#Removing this failsafe database check
-#Patrick
 #for db_pwm in databases_of_pwms:
 #    for file in os.listdir(databases_of_pwms[db_pwm]):
 #        set_pwms[db_pwm].add(file)
@@ -104,10 +106,10 @@ for tf in tf_nn.values:
             print("Errror: missing database ",db)
             continue
         for pwm in x[2:-1]:
-            #if pwm+".meme" in set_pwms[database]:
-            #print("\t Add PWM %s homologs of %s (DB %s) ID: %.2f (Reference %s)"%(pwm,seq,database,100*float(pid),tf[0]))
-            data={"database":database, "code":seq, "pwm":pwm+".meme", "similarity":float(pid)}
-            acc_nn.setdefault(code,[]).append(data)
+            if pwm+".meme" in set_pwms[database]:
+               #print("\t Add PWM %s homologs of %s (DB %s) ID: %.2f (Reference %s)"%(pwm,seq,database,100*float(pid),tf[0]))
+               data={"database":database, "code":seq, "pwm":pwm+".meme", "similarity":float(pid)}
+               acc_nn.setdefault(code,[]).append(data)
 acc_modcre={}
 print("Reading ModCRE database")
 for file in os.listdir(modcre):

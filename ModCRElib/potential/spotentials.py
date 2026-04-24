@@ -1,3 +1,11 @@
+"""Build and serialize statistical interaction potentials from triad files.
+
+This module computes the distance-dependent and environment-aware potential
+matrices used by the ModCRE scoring pipeline. It can be imported to load or
+query precomputed potential files through :class:`Potentials`, or executed as a
+script to derive new potentials from a list of triad files.
+"""
+
 import os, sys, re
 import configparser
 import copy
@@ -39,11 +47,31 @@ from SBILib.data import aminoacids3to1, aminoacids_polarity_boolean
 
 class Potentials(object):
     """
-    This class defines a {Potentials} object.
-    
+    Container for the statistical potential tables used during scoring.
+
+    Object features:
+        - Serialized source path and optional selective-loading mode
+          (`_file`, `_potential`).
+        - Distance-dependent PMF tables for global and context-aware models
+          (`_pmf_3d`, `_pmf_3dc`, `_pmf_s3dc`, `_pmf_s3dc_dd`, `_pmf_pair`).
+        - Single-value/context PMF tables for local and distance-independent
+          variants (`_pmf_local`, `_pmf_s3dc_di`).
+        - Distance-bin index map used to convert raw distances into PMF-array
+          positions (`_distances`).
+        - Accessors that resolve distance bins and return potential values for
+          requested keys/potential families.
+        - Serialization helper to write the complete PMF state back to disk.
     """
 
     def __init__(self, file_name=None, select_potential=None):
+        """Initialize the potential container from an optional serialized file.
+
+        Args:
+            file_name (str, optional): Path to a plain-text or gzipped
+                potentials file.
+            select_potential (str, optional): Restrict loading to a single
+                potential family or use ``"all"`` to load every table.
+        """
         self._file = file_name
         self._pmf_3d = None
         self._pmf_3dc = None
@@ -66,6 +94,7 @@ class Potentials(object):
                self._file = None
 
     def _parse_file(self):
+        """Populate the instance from a serialized potentials file."""
         if self._file.endswith("gz"): compressed=True
         else:                         compressed=False
         for line in functions.parse_file(self._file,compressed):
@@ -91,6 +120,15 @@ class Potentials(object):
                     self._distances[distances[position]] = position
 
     def _get_distance(self, distance):
+        """Return the first configured distance bin strictly above a value.
+
+        Args:
+            distance (float): Raw contact distance.
+
+        Returns:
+            float or None: Matching upper-bin distance, or ``None`` if the
+            distance is outside the configured range.
+        """
         for d in self._distances:
             if distance < d:
                 return d
@@ -98,13 +136,35 @@ class Potentials(object):
         return None
 
     def _get_distance_position(self, distance):
+        """Return the array index associated with a distance bin.
+
+        Args:
+            distance (float): Distance-bin value already present in
+                ``self._distances``.
+
+        Returns:
+            int or None: Position of the bin in the stored arrays.
+        """
         if distance in self._distances:
             return self._distances[distance]
 
         return None
 
     def get_score(self, potential, key=None, distance=None):
-        
+        """Retrieve a potential value for a given key and optional distance.
+
+        Args:
+            potential (str): Potential family name such as ``"3d"``,
+                ``"3dc"``, ``"s3dc"``, ``"s3dc_dd"``, ``"s3dc_di"``,
+                ``"local"``, or ``"pair"``.
+            key (str, optional): Identifier used by keyed potentials.
+            distance (float, optional): Raw distance to map onto the nearest
+                configured bin.
+
+        Returns:
+            float or None: Stored potential value, or ``None`` when the key,
+            distance, or potential family is unavailable.
+        """
         if distance is not None: distance = numpy.floor(self._get_distance(distance))
         position = self._get_distance_position(distance)
         try:
@@ -133,6 +193,11 @@ class Potentials(object):
           return None
 
     def write(self, file_name):
+        """Write all loaded potential tables to a serialized output file.
+
+        Args:
+            file_name (str): Destination file path.
+        """
         functions.write(file_name, "pmf_3d\t%s" % json.dumps(self._pmf_3d, separators=(",", ":")))
         functions.write(file_name, "pmf_3dc\t%s" % json.dumps(self._pmf_3dc, separators=(",", ":")))
         functions.write(file_name, "pmf_s3dc\t%s" % json.dumps(self._pmf_s3dc, separators=(",", ":")))
@@ -147,10 +212,19 @@ class Potentials(object):
 #-------------#
 
 def parse_options():
-    """
-    This function parses the command line arguments and returns an optparse
-    object.
+    """Parse command-line options for statistical-potential generation.
 
+    The parser configures how triad files are interpreted and how output
+    potentials are post-processed (Taylor approximation, smoothing,
+    Z-scoring, and binned versus cumulative counting).
+
+    Returns:
+        optparse.Values: Parsed CLI options describing input/output paths and
+        potential-computation settings.
+
+    Raises:
+        SystemExit: If required arguments are missing or the user requests
+        help.
     """
 
     parser = optparse.OptionParser("python spotentials.py -i input_file [-a --dummy=dummy_dir -o output_file -s -v -z -b]")
@@ -172,15 +246,24 @@ def parse_options():
     return options
 
 def get_statistical_potentials(file_name, approach=False, smooth=False, zscores=False, computation=False, dummy_dir="/tmp"):
-    """
-    This functions derives statistical potentials from a list of triads
-    files.
+    """Derive all statistical potential tables from a triad-file manifest.
 
-    @input:
-    file_name {filename} full path to triads files
+    Args:
+        file_name (str): Path to the file listing triad files to process.
+        approach (bool, optional): Whether to estimate missing contacts with
+            the Taylor/BLOSUM-based approximation.
+        smooth (bool, optional): Whether to smooth the distance-dependent
+            potential profiles.
+        zscores (bool, optional): Whether to convert selected potentials to
+            Z-scores after calculation.
+        computation (bool, optional): Whether to compute per-bin rather than
+            cumulative frequencies.
+        dummy_dir (str, optional): Unused compatibility argument retained by
+            the script interface.
 
-    @return:
-
+    Returns:
+        tuple: ``(pmf_3d, pmf_3dc, pmf_s3dc, pmf_s3dc_dd, pmf_s3dc_di,
+        pmf_local, pmf_pair, distances)``.
     """
 
     # Initialize #
@@ -319,22 +402,18 @@ def get_statistical_potentials(file_name, approach=False, smooth=False, zscores=
     return pmf_3d, pmf_3dc, pmf_s3dc, pmf_s3dc_dd, pmf_s3dc_di, pmf_local, pmf_pair, distances
 
 def get_frequencies(file_name, computation=False, approach=False):
-    """
-    This function extracts the different frequencies to calculate the
-    statistical potentials: i.e. "f_dab", "f_a_dab", "f_a_dab_oa", "f_a_b_dab",
-    "f_dab_oa_ob" and "f_a_b_dab_oa_ob".
+    """Collect the contact-frequency tables required to build the potentials.
 
-    @input:
-    file_name {filename}
+    Args:
+        file_name (str): Path to a manifest listing triad files.
+        computation (bool, optional): Whether to count contacts in discrete
+            bins instead of cumulatively.
+        approach (bool, optional): Whether to pre-initialize additional
+            residue/environment combinations needed by the approximation mode.
 
-    @return:
-    f_dab {list}
-    f_a_dab {dict}
-    f_a_dab_oa {dict}
-    f_a_b_dab {dict}
-    f_dab_oa_ob {dict}
-    f_a_b_dab_oa_ob {dict}
-
+    Returns:
+        tuple: Frequency tables ``(f_dab, f_a_dab, f_a_dab_oa, f_a_b_dab,
+        f_dab_oa_ob, f_a_b_dab_oa_ob)``.
     """
 
     # Initialize #
@@ -460,9 +539,14 @@ def get_frequencies(file_name, computation=False, approach=False):
     return f_dab, f_a_dab, f_a_dab_oa, f_a_b_dab, f_dab_oa_ob, f_a_b_dab_oa_ob
 
 def adjust_distance_to_bin(distance,bin_distance):
-    """
-    This function adjusts distance to best bin.
-    
+    """Snap a raw distance down to the lower edge of its bin.
+
+    Args:
+        distance (float): Raw contact distance.
+        bin_distance (float): Width of each distance bin.
+
+    Returns:
+        float: Lower-bound bin value associated with ``distance``.
     """
 
     # Initialize #
@@ -476,6 +560,17 @@ def adjust_distance_to_bin(distance,bin_distance):
 
 
 def approach_pmf(a_b_oa_ob, pmf, symbol):
+    """Approximate missing PMF entries using BLOSUM-based substitutions.
+
+    Args:
+        a_b_oa_ob (str): Residue or residue-environment pair key.
+        pmf (dict): Potential matrix to complete.
+        symbol (str): Sign convention used by the target potential family.
+
+    Returns:
+        list: Approximated per-distance potential profile for the requested
+        key.
+    """
 
     # Initialize #
     kB = 8.31441e-3 # Boltzmann constant
@@ -566,10 +661,14 @@ def approach_pmf(a_b_oa_ob, pmf, symbol):
     return approached_pmf
 
 def get_transition_probability(A, B):
-    """
-    This function returns the transition probability of an amino acid "A"
-    to an amino acid "B" (according to BLOSUM62 scoring matrix).
-    
+    """Return the BLOSUM62-derived transition probability between residues.
+
+    Args:
+        A (str): Source amino-acid triplet code.
+        B (str): Target amino-acid triplet code.
+
+    Returns:
+        float: Transition probability scaled by background frequencies.
     """
     
     l = 0.347
@@ -600,10 +699,16 @@ def get_transition_probability(A, B):
 
 
 def smooth_bin(array, position, n):
-    """
-    This function smooths a given potential PMF bin by averaging it with
-    the PMFs from the bins around +/- "n" positions.
-    
+    """Average a distance bin with its neighboring bins.
+
+    Args:
+        array (list): Distance-indexed potential values.
+        position (int): Bin position to smooth.
+        n (int): Number of neighboring bins to inspect on each side.
+
+    Returns:
+        float or None: Mean of the non-empty neighboring values, or ``None``
+        if the smoothing window contains no numeric entries.
     """
 
     values = []
@@ -617,6 +722,18 @@ def smooth_bin(array, position, n):
        return None
 
 def calculate_zscores(pmf, pmf_name, bin_distance):
+    """Normalize a potential family against comparable residue combinations.
+
+    Args:
+        pmf (dict): Potential matrix to normalize.
+        pmf_name (str): Name of the potential family being transformed.
+        bin_distance (float): Width of the distance bins used to build the
+            matrix.
+
+    Returns:
+        dict or None: Z-score-transformed potential matrix, or ``None`` when
+        the potential family is unsupported.
+    """
 
     # Initialize #
     zpmf = {}
@@ -742,12 +859,18 @@ def calculate_zscores(pmf, pmf_name, bin_distance):
 
     return None
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """Run the command-line workflow to compute and export potentials.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse runtime options and resolve absolute input/output paths.
+        2. Compute all requested potential families from the triad manifest.
+        3. Store the computed PMFs in a :class:`Potentials` container.
+        4. Write the serialized potentials file or print tables to stdout.
 
+    Returns:
+        None. Potentials are written to disk or emitted to standard output.
+    """
     # Arguments & Options #
     options = parse_options()
 
@@ -779,3 +902,6 @@ if __name__ == "__main__":
         sys.stdout.write("pmf_pair\t%s\n" % json.dumps(potentials_obj._pmf_pair, separators=(",", ":")))
         sys.stdout.write("distances\t%s\n" % json.dumps(potentials_obj._distances, separators=(",", ":")))
 
+
+if __name__ == "__main__":
+    main()

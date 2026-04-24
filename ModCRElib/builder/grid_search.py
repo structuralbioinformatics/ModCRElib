@@ -1,3 +1,10 @@
+"""
+Run ModCRE grid-search model generation and scoring pipeline.
+
+Creates model sets, computes structural descriptors, evaluates multiple
+potential settings/thresholds, and writes performance summaries.
+"""
+
 import os, sys, re
 import configparser
 import numpy
@@ -53,9 +60,14 @@ from SBILib.structure import PDB
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for grid-search execution.
 
+    How to run:
+        ``python grid_search.py --pbm pbm_dir --pdb pdb_dir --pwm pwm_dir [-o output_dir]``
+
+    Returns:
+        optparse.Values: Namespace with PBM/PDB roots, model inputs, thresholds,
+        potential controls, and execution-step toggles.
     """
 
     parser = optparse.OptionParser("python2.7 %prog --pbm=<pbm_dir> --pdb=<pdb_dir> --pwm=<pwm_dir> [--dummy=<dummy_dir> -o <output_dir> --start=<start_step> --stop=<stop_step> -v]")
@@ -85,7 +97,7 @@ def parse_options():
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse options and prepare output folders.
     options = parse_options()
 
 

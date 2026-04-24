@@ -1,3 +1,10 @@
+"""
+Convert UniRef FASTA headers into UniProt-style headers.
+
+Reads UniRef records, rewrites header fields into ``tr|ACC|ENTRY ...`` style,
+and writes a transformed FASTA file.
+"""
+
 import os, sys, re
 import configparser
 import hashlib
@@ -34,9 +41,15 @@ from ModCRElib.builder import TFinderSelect
 #-------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse CLI options for UniRef-to-UniProt-header FASTA conversion.
+
+    How to run:
+        ``python uniref2SP.py -u uniref.fasta[.gz] -o SPROT [-v]``
+
+    Returns:
+        optparse.Values: Namespace with ``uniref_file``, ``uniprot_file``, ``verbose``.
+    """
 
     parser = optparse.OptionParser("python uniref2SP.py -u uniref_file -o output_file -v]")
 

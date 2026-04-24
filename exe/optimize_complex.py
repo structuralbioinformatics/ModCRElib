@@ -58,6 +58,15 @@ from ModCRElib.structure.protein.model_protein import create_mapping
 
 
 def parse_arguments():  # This function passes the arguments given by the user.
+    """
+    Parse command-line options for complex optimization post-processing.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed options with output folder and execution mode.
+    """
 
     parser = optparse.OptionParser()
     parser.add_option('-d', action="store",  dest="output_folder", default=None, help="Path to the folder with the Complexes.")
@@ -74,6 +83,17 @@ def parse_arguments():  # This function passes the arguments given by the user.
 
 
 def clean(options):
+ """
+  Remove temporary optimization artifacts from fragment directories.
+ 
+  Args:
+      options (optparse.Values): Parsed command-line options.
+ 
+  Returns:
+      None.
+ 
+ Args:
+     options (Any): Value used by this routine."""
 
  print("Clean folder "+options.output_folder)
  for output_fragment in os.listdir(options.output_folder):
@@ -93,6 +113,17 @@ def clean(options):
                   os.remove(os.path.join(output_dir,code+"rsr"))
 
 def renumber(options):
+ """
+  Renumber optimized structures against reference protein sequences.
+ 
+  Args:
+      options (optparse.Values): Parsed command-line options.
+ 
+  Returns:
+      None.
+ 
+ Args:
+     options (Any): Value used by this routine."""
 
  print("Renumber structures  "+options.output_folder)
  job_dir = os.path.join(os.path.dirname(options.output_folder),"../..")
@@ -217,6 +248,17 @@ def renumber(options):
  
 
 def optimize(options):
+ """
+  Run optimization jobs for fragment complexes and collect outputs.
+ 
+  Args:
+      options (optparse.Values): Parsed command-line options.
+ 
+  Returns:
+      None.
+ 
+ Args:
+     options (Any): Value used by this routine."""
 
  print("Open folder "+options.output_folder)
  for output_fragment in os.listdir(options.output_folder):
@@ -314,8 +356,19 @@ def optimize(options):
 # Main        #
 #-------------#
 
-if __name__ == "__main__":
+def main():
+     """
+     Run optimization, renumbering, and cleanup for generated complexes.
 
+     Workflow:
+         1. Parse options for the target output folder.
+         2. Optimize all fragment complexes (local or queued execution).
+         3. Renumber optimized structures using reference FASTA sequences.
+         4. Remove temporary optimization artifacts.
+
+     Returns:
+         None. Optimized and renumbered structures remain in-place.
+     """
      options=parse_arguments()
      print("\n*******************\n Optimization\n*******************\n")
      optimize(options)
@@ -324,4 +377,8 @@ if __name__ == "__main__":
      print("\n*******************\n Cleaning folders\n*******************\n")
      clean(options)
      print("Done")
+
+
+if __name__ == "__main__":
+     main()
 

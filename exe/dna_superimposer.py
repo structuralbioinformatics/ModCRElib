@@ -42,8 +42,13 @@ from ModCRElib.structure.dna import x3dna
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for DNA-based structural superimposition.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for static/mobile inputs and output.
 
     """
 
@@ -63,6 +68,23 @@ def parse_options():
     return options
 
 def dna_superimposition_2(pdb_file_A, pdb_file_B, extension, dummy_dir="/tmp"):
+    """
+        Superimpose a mobile DNA model onto a static DNA model by sequence offset.
+    
+        Args:
+            pdb_file_A (str): Static/reference PDB file.
+            pdb_file_B (str): Mobile PDB file to transform.
+            extension (int): Basepair offset applied to static alignment positions.
+            dummy_dir (str, optional): Temporary directory root.
+    
+        Returns:
+            None.
+    
+    Args:
+        pdb_file_A (Any): Value used by this routine.
+        pdb_file_B (Any): Value used by this routine.
+        extension (Any): Value used by this routine.
+        dummy_dir (Any): Directory path used by this operation."""
 
     # Initialize #
     dummy_file = os.path.join(dummy_dir, "%s.pdb" % os.getpid())
@@ -158,6 +180,23 @@ def dna_superimposition_2(pdb_file_A, pdb_file_B, extension, dummy_dir="/tmp"):
 
 
 def dna_superimposition(pdb_file_A, pdb_file_B, alignment, dummy_dir="/tmp"):
+    """
+        Superimpose two DNA-containing PDBs using explicit residue-pair alignment.
+    
+        Args:
+            pdb_file_A (str): Static/reference PDB file.
+            pdb_file_B (str): Mobile PDB file to transform.
+            alignment (list): Residue alignment pairs as parsed chain/position tuples.
+            dummy_dir (str, optional): Temporary directory root.
+    
+        Returns:
+            PDB: Superimposed mobile structure as PDB object.
+    
+    Args:
+        pdb_file_A (Any): Value used by this routine.
+        pdb_file_B (Any): Value used by this routine.
+        alignment (Any): Sequence/alignment content used in this step.
+        dummy_dir (Any): Directory path used by this operation."""
 
     # Initialize #
     dummy_file = os.path.join(dummy_dir, "%s.pdb" % os.getpid())
@@ -242,11 +281,16 @@ def dna_superimposition(pdb_file_A, pdb_file_B, alignment, dummy_dir="/tmp"):
 
     return pdb_obj
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line DNA superimposition workflow.
 
-if __name__ == "__main__":
+    Args:
+        None.
+
+    Returns:
+        None. Superimposed structure is written to the output directory.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -292,3 +336,11 @@ if __name__ == "__main__":
     superimposed_file = os.path.abspath(os.path.join(options.output_dir, "superimposed.pdb"))
     # Write PDB file #
     pdb_obj.write(output_file, force=True)
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()

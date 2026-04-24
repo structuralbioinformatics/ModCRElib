@@ -45,8 +45,13 @@ from ModCRElib.structure.dna import x3dna
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for protein-DNA complex DNA remodeling.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for input resources and output path.
 
     """
 
@@ -69,6 +74,31 @@ def parse_options():
     return options
 
 def get_dna_model_pdb_obj(pdb_file, dna_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir="/tmp"):
+    """
+        Mutate interface DNA bases and return a remodeled PDB object.
+    
+        The function projects `dna_sequence` onto the detected interface basepairs,
+        runs X3DNA `mutate_bases`, and rebuilds DNA residues while preserving
+        backbone-only residues for unspecified (`N`) positions.
+    
+        Args:
+            pdb_file (str): Input protein-DNA PDB file.
+            dna_sequence (str): DNA sequence to model over the interface.
+            x3dna_obj (X3DNA): Parsed DNA basepair annotations.
+            interface_obj (Interface): Interface object providing target basepairs.
+            interface_range (list, optional): Explicit basepair range override.
+            dummy_dir (str, optional): Temporary directory root.
+    
+        Returns:
+            PDB: Remodeled PDB object with mutated DNA.
+    
+    Args:
+        pdb_file (Any): Path to the input/output file.
+        dna_sequence (Any): DNA identifier, sequence, or DNA-related data.
+        x3dna_obj (Any): DNA identifier, sequence, or DNA-related data.
+        interface_obj (Any): Interface descriptor or interface-related data.
+        interface_range (Any): Interface descriptor or interface-related data.
+        dummy_dir (Any): Directory path used by this operation."""
 
     # Initialize #
     basepairs = set()
@@ -144,11 +174,22 @@ def get_dna_model_pdb_obj(pdb_file, dna_sequence, x3dna_obj, interface_obj, inte
     os.remove(model_pdb_file)
     return model_pdb_obj
 
-#-------------#
-# Main        #
-#-------------#
+def main():
+    """
+    Run the command-line DNA-modeling workflow for interfaces.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse command-line options.
+        2. Resolve PDB/interface/threading inputs.
+        3. Build X3DNA and interface objects.
+        4. Remodel DNA for each requested sequence and write models.
+
+    Args:
+        None.
+
+    Returns:
+        None. Modeled PDB files are written to the output directory.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -217,4 +258,12 @@ if __name__ == "__main__":
 
       # Write model object #
       pdb_obj.write(os.path.join(options.output_dir, "model." + options.dna_sequence + ".pdb"))
+
+
+#-------------#
+# Main        #
+#-------------#
+
+if __name__ == "__main__":
+    main()
 

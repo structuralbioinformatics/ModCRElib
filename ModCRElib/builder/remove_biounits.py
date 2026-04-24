@@ -1,3 +1,7 @@
+"""
+Mark/remove problematic biounit-derived assets from the PDB build workspace.
+"""
+
 import os, sys
 import optparse
 import configparser
@@ -41,9 +45,13 @@ from SBILib.structure.chain import Chain
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for cleanup of failed biounit entries.
 
+    How to run:
+        ``python remove_biounits.py --pdb pdb_build_dir [-v]``
+
+    Returns:
+        optparse.Values: Namespace with ``pdb_dir`` and ``verbose``.
     """
 
     parser = optparse.OptionParser("python remove_biounits.py --pdb=pdb_dir")
@@ -63,10 +71,11 @@ def parse_options():
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse options and locate family status file.
     options = parse_options()
     families_file = os.path.join(options.pdb_dir, "families.txt")
     remove_biounit=set()
+    # Step 2) Collect PDB ids marked as failed in families metadata.
     for linen in functions.parse_file(families_file):
         if not linen.startswith("#"): continue
         line = linen.lstrip("#").strip().split(";")
@@ -77,6 +86,7 @@ if __name__ == "__main__":
            if options.verbose:sys.stdout.write("\t-- skip from biounits %s\n"%(pdb_name))
            remove_biounit.add(pdb_name)
 
+    # Step 3) Move related generated artifacts aside (".previous"/".skip").
     for pdb_name in remove_biounit:
         original_pdb_file = os.path.abspath(os.path.join(options.pdb_dir, "biounits", pdb_name + ".pdb1"))
         if not os.path.exists(original_pdb_file): original_pdb_file = os.path.abspath(os.path.join(options.pdb_dir, "biounits", pdb_name.upper() + ".pdb1"))

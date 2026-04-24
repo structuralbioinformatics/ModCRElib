@@ -1,3 +1,30 @@
+"""
+Binding profiles for ModCRE: PWM + FIMO scans, statistical energies, and clustering.
+
+Given a directory of TF–DNA models, the module builds position weight matrices with
+``pwm_pbm``, runs FIMO on a target DNA FASTA, scores hits with statistical potentials,
+clusters motifs, and exports per-model and per-cluster JSON (plus optional matplotlib
+and Plotly HTML). Helper functions support merging tracks, windowing, and web-facing
+plots.
+
+How to run (CLI):
+    ``python binding_profiles.py --dummy DUMMY_DIR -i MODEL_DIR -d DNA.fa \\
+        --pdb PDB_DIR --pbm PBM_DIR [-o OUTPUT_DIR] [-l LABEL] [-v]``
+
+    Entry point is ``main()``; the same helpers are importable for custom pipelines.
+
+Outputs (under ``output_dir``):
+    ``pwms/`` (MEME + MSA per motif and potential label), ``individual_profiles/``
+    (JSON per model), ``cluster_profiles/`` (merged JSON per cluster), and
+    ``clusters.txt`` (cluster membership). Optional Plotly/matplotlib helpers write
+    beside or under ``plots/`` when those functions are used directly.
+
+See also:
+    ``get_potentials_and_thresholds()`` — table parser for optimal
+    potential/threshold rows (for workflows that drive ``load_statistical_potentials``
+    from a grid-search file rather than the fixed ``pair`` / ``s3dc_dd`` loop in
+    ``main()``).
+"""
 import os, sys, re
 import configparser
 import optparse
@@ -61,20 +88,60 @@ from ModCRElib.sequence import blast
 
 
 def get_potentials_and_thresholds(op_file):
+    """
+    Read split-potential names and score thresholds from a grid-search results file.
+
+    Expects a header line plus data rows with whitespace-separated fields; field
+    index 2 is the threshold and index 3 is the split-potential key (legacy layout).
+
+    Args:
+        op_file (str): Path to the optimal-potentials table.
+
+    Returns:
+        list[tuple]: ``(split_potential, threshold_token)`` for each data row after
+        the header.
+
+    Note:
+        Rows with fewer than four whitespace-separated fields are skipped (blank or
+        malformed lines).
+    """
 
     potentials_and_thresholds = []
     optimal_file = open(op_file, "r").readlines()
     for line in optimal_file[1:]:
         fields = line.split()
-        potentials_and_thresholds.append(tuple((fields[3], fields[2])))
+        if len(fields) < 4:
+            continue
+        potentials_and_thresholds.append((fields[3], fields[2]))
 
     return potentials_and_thresholds
 
 
 def perform_match_analysis(msa_obj, fasta_file, motif_name, output_dir, dummy_dir, pval_cutoffs, pwm_meme=None, verbose=True):
+    """
+    Run FIMO with a motif PWM and count hits per nucleotide for several p-value views.
+
+    Writes MEME/MSA under ``output_dir`` when ``pwm_meme`` is missing but ``msa_obj``
+    is provided. Hit counts per position use strict ``p < cutoff`` (not ``<=``).
+
+    Args:
+        msa_obj: ``nMSA``-like object used to emit MEME if needed (or ``None`` if
+            ``pwm_meme`` exists).
+        fasta_file (str): DNA FASTA path.
+        motif_name (str): Basename for generated ``.meme.s`` / ``.msa`` files.
+        output_dir (str): Directory for PWM outputs.
+        dummy_dir (str): FIMO scratch directory.
+        pval_cutoffs (list): Keys (floats) for per-threshold count vectors.
+        pwm_meme (str, optional): Existing MEME path; if absent, derived from ``msa_obj``.
+        verbose (bool): Progress to stdout.
+
+    Returns:
+        tuple: ``(matches_per_nucleotide, fimo_obj)`` — dict keyed by cutoff to
+        per-position integer counts, and the ``Fimo`` wrapper.
+    """
 
     matches_per_nucleotide = {}
-    if os.path.exists(str(pwm_meme)) == False:
+    if pwm_meme is None or not os.path.isfile(str(pwm_meme)):
         if msa_obj == None:
             print("If you dont provide a meme pwm you must provide a msa_obj")
             exit(0)
@@ -128,6 +195,31 @@ def perform_match_analysis(msa_obj, fasta_file, motif_name, output_dir, dummy_di
 
 
 def perform_energy_analysis(msa_obj, x3dna_obj, binding_site, fasta_file, triads_obj, potentials, dummy_dir, fimo_obj, pval_cutoffs, split_potential, verbose):
+    """
+    Score each FIMO hit (per p-value cutoff) with statistical potentials along the DNA.
+
+    Uses ``pwm_pbm.get_min_max_scores`` and ``get_score_for_subseq``; scales raw scores
+    with ``pwm_pbm.scale``. For ``split_potential`` in ``pair``, ``s3dc``, ``local``,
+    scaling uses ``-subseq_score``; otherwise the raw sign is kept.
+
+    Args:
+        msa_obj: PWM/MSA used for score calibration.
+        x3dna_obj: Structure context for dinucleotide mapping.
+        binding_site (dict): Dinucleotide keys mapping to triad lists for subsequence
+            scoring.
+        fasta_file (str): Same DNA FASTA as FIMO.
+        triads_obj: Triads container (reserved for callers; unused in the body).
+        potentials: Loaded statistical potentials per chain.
+        dummy_dir (str): Scratch path for scoring helpers.
+        fimo_obj: ``Fimo`` instance or ``None`` (empty result dicts).
+        pval_cutoffs (list): Hits with ``p <= cutoff`` are scored.
+        split_potential (str): Potential family key.
+        verbose (bool): Timestamped progress lines.
+
+    Returns:
+        tuple: ``(energies_per_nucleotide, energies_per_nucleotide_raw)`` — per-cutoff
+        lists of per-position lists of scaled and raw scores.
+    """
 
     if verbose:sys.stdout.write("Starting energy computation ..." + str(datetime.datetime.now()) + "\n")
     energies_per_nucleotide = {}
@@ -184,6 +276,22 @@ def perform_energy_analysis(msa_obj, x3dna_obj, binding_site, fasta_file, triads
 
 
 def perform_fimo_analysis(fimo_obj, fasta_file, pval_cutoffs, verbose):
+    """
+    Collect per-nucleotide FIMO scores and ``-log10(p)`` for hits under each cutoff.
+
+    For each cutoff, every position inside a hit with ``p <= cutoff`` appends that
+    hit's score and log p-value (deduplicated by hit identity string).
+
+    Args:
+        fimo_obj: ``Fimo`` wrapper with sorted hits.
+        fasta_file (str): DNA FASTA path (sequence after header).
+        pval_cutoffs (list): Threshold keys (typically floats).
+        verbose (bool): Unused; kept for API compatibility.
+
+    Returns:
+        tuple: ``(scores_per_nucleotide, logpval_per_nucleotide)`` dicts keyed by
+        cutoff, values are lists-of-lists per DNA position.
+    """
 
     scores_per_nucleotide = {}
     logpval_per_nucleotide = {} 
@@ -225,6 +333,16 @@ def perform_fimo_analysis(fimo_obj, fasta_file, pval_cutoffs, verbose):
 
 
 def dummy_profile(fasta_file, pval_cutoffs):
+    """
+    Build a neutral per-position profile (single zero score per nucleotide per cutoff).
+
+    Args:
+        fasta_file (str): DNA FASTA path.
+        pval_cutoffs (list): Keys for the output dict.
+
+    Returns:
+        dict: ``cutoff -> [[0.0], ...]`` with length matching DNA sequence.
+    """
 
     profile = {}
     # Get DNA length #
@@ -242,6 +360,20 @@ def dummy_profile(fasta_file, pval_cutoffs):
 
 
 def merge_data_per_nucleotide(match_list, mode, pval_cutoffs):
+    """
+    Combine per-motif per-nucleotide vectors into one structure for a cluster.
+
+    ``add`` sums integer match counts across motifs. ``merge`` unions list-valued
+    tracks so stricter cutoffs inherit the broadest hit lists from cutoff ``1.0``.
+
+    Args:
+        match_list (list): One dict per motif, each keyed by ``pval_cutoffs``.
+        mode (str): ``\"add\"`` or ``\"merge\"``.
+        pval_cutoffs (list): Cutoff keys shared across dicts.
+
+    Returns:
+        dict: Merged structure keyed by cutoff; shape matches input mode.
+    """
 
     final_dict = {}
     seq_length = len(match_list[0][pval_cutoffs[0]])
@@ -275,6 +407,15 @@ def merge_data_per_nucleotide(match_list, mode, pval_cutoffs):
 
 
 def scale_to_percentage(matches_per_nucleotide):
+    """
+    Normalize each cutoff's match-count vector to percent of the maximum count.
+
+    Args:
+        matches_per_nucleotide (dict): Cutoff keys to lists of numeric counts.
+
+    Returns:
+        dict: Same keys, values scaled in-place and returned.
+    """
 
     for pc in sorted(matches_per_nucleotide.keys()):
         # Get the highest score #
@@ -290,6 +431,16 @@ def scale_to_percentage(matches_per_nucleotide):
 
 
 def average_scores(energies_per_nucleotide, pval_cutoffs):
+    """
+    Replace each position's list of scores with ``[mean, std]`` (or ``[0,0]`` if empty).
+
+    Args:
+        energies_per_nucleotide (dict): Cutoff -> list of per-position score lists.
+        pval_cutoffs (list): Cutoffs to process.
+
+    Returns:
+        dict: Updated ``energies_per_nucleotide``.
+    """
 
     # Iterate over the different pvalue cutoffs #
     for pc in pval_cutoffs:
@@ -307,6 +458,23 @@ def average_scores(energies_per_nucleotide, pval_cutoffs):
 
 
 def set_window_size(dict_per_nucleotide, winsize, mode, pval_cutoffs, window_spacing):
+    """
+    Downsample per-nucleotide series with sliding windows for plotting.
+
+    ``simple`` averages scalar values per window. ``average`` averages mean and
+    std-dev tracks from ``average_scores`` output.
+
+    Args:
+        dict_per_nucleotide (dict): Cutoff -> per-position data.
+        winsize (int): Window width in nucleotides (1 = no smoothing).
+        mode (str): ``\"simple\"`` or ``\"average\"``.
+        pval_cutoffs (list): Cutoffs present in ``dict_per_nucleotide``.
+        window_spacing (int): Step between window centers.
+
+    Returns:
+        dict: For each cutoff, ``value`` / optional ``std_dev`` and
+        ``nucleotide_position`` lists (1-based positions in output).
+    """
 
     nuc_len = len(dict_per_nucleotide[pval_cutoffs[0]])
     if mode == "simple":
@@ -354,6 +522,20 @@ def set_window_size(dict_per_nucleotide, winsize, mode, pval_cutoffs, window_spa
 
 
 def write_fimo_output(matches_per_nucleotide, form, input_label, output_dir, verbose, plot=False):
+    """
+    Export FIMO match counts as BED (``form == \"bed\"``) with scores on a 0–1000 scale.
+
+    Args:
+        matches_per_nucleotide (dict): Cutoff -> per-position counts.
+        form (str): Output format; only ``\"bed\"`` is implemented here.
+        input_label (str): Track/chromosome label prefix.
+        output_dir (str): Destination folder.
+        verbose (bool): Log written path.
+        plot (bool): Unused.
+
+    Returns:
+        None.
+    """
 
     if form == "bed":
         # Write a bed file #
@@ -387,6 +569,15 @@ def write_fimo_output(matches_per_nucleotide, form, input_label, output_dir, ver
         
 
 def get_positive_scores(scores):
+    """
+    Flip the sign of every value in a scores dict (in-place).
+
+    Args:
+        scores (dict): Numeric values by key.
+
+    Returns:
+        dict: Same object after mutation.
+    """
 
     for key in list(scores.keys()):
         scores[key] = scores[key]*-1
@@ -395,6 +586,18 @@ def get_positive_scores(scores):
 
 
 def cut_dna_sequence(dna_seq, dummy_dir, start, stop):
+    """
+    Write a FASTA slice of ``dna_seq`` into ``dummy_dir`` for downstream tools.
+
+    Args:
+        dna_seq (str): Path to a single-sequence FASTA.
+        dummy_dir (str): Output directory.
+        start (int, optional): 1-based inclusive start (``None`` = from beginning).
+        stop (int, optional): 1-based inclusive end (``None`` = to end).
+
+    Returns:
+        str: Path to the written dummy FASTA fragment.
+    """
 
     # Get the new sequence #
     header, sequence = functions.parse_fasta_file_single_sequence(dna_seq)
@@ -416,6 +619,22 @@ def cut_dna_sequence(dna_seq, dummy_dir, start, stop):
 
 
 def include_pwm_into_json(json_dict, msa_obj, pwm_meme, root_path, dummy_dir):
+    """
+    Materialize MEME/PWM/logo files and attach PWM metadata to the last motif in ``json_dict``.
+
+    Expects ``json_dict[\"motifs\"][-1]`` to exist; fills ``pwm`` with paths,
+    frequency matrix, and information content.
+
+    Args:
+        json_dict (dict): Experiment/motif bundle (mutated).
+        msa_obj: MSA object with ``write`` for MEME/PWM.
+        pwm_meme (str): Target MEME path (``.meme.s``).
+        root_path (str): Stripped from paths for web-relative URIs.
+        dummy_dir (str): Passed to ``pwm_pbm.write_logo``.
+
+    Returns:
+        dict: Updated ``json_dict``.
+    """
 
     # Set the names of the files #
     meme_file = pwm_meme
@@ -451,31 +670,63 @@ def include_pwm_into_json(json_dict, msa_obj, pwm_meme, root_path, dummy_dir):
 
 
 def write_energies_output(energies_per_nucleotide, form, input_label, output_dir, verbose, plot=False):
+    """
+    Write per-position mean/std energy summaries to CSV or BED and pickle the series.
 
-    # Obtain the average and the standard deviation for each nucleotide position #
+    Args:
+        energies_per_nucleotide (list): Per-position lists of raw scores (iterable
+            of positions; each position aggregated to mean/std in the loop).
+        form (str): ``\"csv\"`` or ``\"bed\"``.
+        input_label (str): Output basename prefix.
+        output_dir (str): Destination directory.
+        verbose (bool): Unused.
+        plot (bool): Unused.
+
+    Returns:
+        None. Writes ``*_energies.{form}`` and pickles ``[[mean, std], ...]`` per
+        position to ``energies_per_nucleotide.p`` (does not mutate the input list).
+    """
+
+    data = energies_per_nucleotide
     output_file = os.path.join(output_dir, input_label + "_energies." + form)
-    e_file = open(output_file, "w")
-    if form == "csv":
-        e_file.write("Nucleotide\tEnergy_average\tEnergy_std_dev\n")
-    if form == "bed":
-        e_file.write("track name=TF_binding description='Statistical potentials based scores' useScore=1\n")
-    for i in range(0, len(energies_per_nucleotide)):
-        av = np.mean(energies_per_nucleotide[i])
-        std_dev = np.std(energies_per_nucleotide[i])    
-        energies_per_nucleotide = [av, std_dev]
+    row_summaries = []
+    with open(output_file, "w") as e_file:
         if form == "csv":
-            e_file.write(str(i) + "\t" + str(av) + "\t" + str(std_dev) + "\n")
+            e_file.write("Nucleotide\tEnergy_average\tEnergy_std_dev\n")
         if form == "bed":
-            e_file.write(input_label + "\t" + str(i) + "\t" + str(i+1) + "\t" + "Es3dc_dd" + "\t" + str(av*1000) + "\n")
-    # Also, pickle the energies_per_nucleotide object #
-    pickle.dump(energies_per_nucleotide, open(os.path.join(output_dir, "energies_per_nucleotide.p"), "wb"))
+            e_file.write("track name=TF_binding description='Statistical potentials based scores' useScore=1\n")
+        for i in range(0, len(data)):
+            av = np.mean(data[i])
+            std_dev = np.std(data[i])
+            row_summaries.append([av, std_dev])
+            if form == "csv":
+                e_file.write(str(i) + "\t" + str(av) + "\t" + str(std_dev) + "\n")
+            if form == "bed":
+                e_file.write(input_label + "\t" + str(i) + "\t" + str(i + 1) + "\t" + "Es3dc_dd" + "\t" + str(av * 1000) + "\n")
+    pickle_path = os.path.join(output_dir, "energies_per_nucleotide.p")
+    with open(pickle_path, "wb") as pf:
+        pickle.dump(row_summaries, pf)
 
 #-----------#
 #   Plots   #
 #-----------#
 
 def make_plot_per_nucleotide(matches_per_nucleotide, input_label, output_dir, pval_cutoffs, mode):
-    
+    """
+    Save matplotlib PNGs for several window sizes/spacings over FIMO match profiles.
+
+    Args:
+        matches_per_nucleotide (dict): Cutoff -> per-position values (``simple`` mode)
+            or ``average_scores`` output (``average`` mode).
+        input_label (str): Basename prefix for PNG files.
+        output_dir (str): Parent of ``plots/`` (``plots`` is sibling of this dirname).
+        pval_cutoffs (list): Thresholds to draw.
+        mode (str): ``\"simple\"`` or ``\"average\"`` (passed to ``set_window_size``).
+
+    Returns:
+        None.
+    """
+
     plot_dir = os.path.join(os.path.dirname(output_dir), "plots")
     if not os.path.exists(plot_dir):
         os.mkdir(plot_dir)
@@ -522,6 +773,25 @@ def make_plot_per_nucleotide(matches_per_nucleotide, input_label, output_dir, pv
 
 # Include a variable wwith DNA sequence #
 def plotly_plot(html_file, binding_profile_dict_list, binding_profile_variables, dna_seq, dna, motif, fullscreen=False):
+    """
+    Build an interactive Plotly HTML for one DNA: matches, log p-values, and energies.
+
+    ``binding_profile_dict_list`` and ``binding_profile_variables`` are parallel:
+    each dict is keyed by p-value cutoff; variables include ``\"matches\"``,
+    ``\"logpval\"``, ``\"energies_s3dc_dd\"``.
+
+    Args:
+        html_file (str): Output HTML path (non-fullscreen).
+        binding_profile_dict_list (list): Profile dicts to layer.
+        binding_profile_variables (list): Variable name per dict (parallel).
+        dna_seq (str): DNA sequence string (one letter per position).
+        dna (str): Label for the x-axis title.
+        motif (str): Plot title fragment.
+        fullscreen (bool): If True, also write ``*_fullscreen.html``.
+
+    Returns:
+        None.
+    """
 
     import plotly
     import plotly.graph_objs as go
@@ -753,8 +1023,24 @@ def plotly_plot(html_file, binding_profile_dict_list, binding_profile_variables,
     
 
 def plotly_plot_comparison(html_file, binding_profile_dict_list, binding_profile_variables, dna, motif, fullscreen=False):
+    """
+    Plotly overlay for two DNA sequences (allele or condition comparison).
 
-    # This function is similar to the previous one. Here, binding_profile_list_dict contains two lists, for the two DNA sequences that will be compared #
+    ``binding_profile_dict_list`` has shape ``[profile_bundle_dna0, profile_bundle_dna1]``
+    where each bundle is a list of dicts paired with ``binding_profile_variables``.
+
+    Args:
+        html_file (str): Output HTML path.
+        binding_profile_dict_list (list): Length-2 list of profile bundles.
+        binding_profile_variables (list): Shared variable names (``matches``, ...).
+        dna (list): Two DNA id strings for legend and axis titles.
+        motif (str): Title fragment.
+        fullscreen (bool): Emit fullscreen HTML variant when True.
+
+    Returns:
+        None.
+    """
+
     import plotly
     import plotly.graph_objs as go
     from plotly.offline import plot
@@ -988,7 +1274,30 @@ def plotly_plot_comparison(html_file, binding_profile_dict_list, binding_profile
 
 
 
-def get_energies_for_individual_nucleotides(triads_obj, fimo_obj, fasta_file, potentials, split_potential, pval_cutoffs, dummy_dir, verbose):
+def get_energies_for_individual_nucleotides(triads_obj, fimo_obj, fasta_file, potentials, split_potential, pval_cutoffs, dummy_dir, verbose, binding_site, x3dna_obj):
+    """
+    Per-nucleotide energy lists inside FIMO hits (partial implementation).
+
+    Initializes per-position lists for each cutoff. The detailed per-triad
+    decomposition block is commented; the active path scores whole-hit sequences
+    via ``pwm_pbm.get_score_for_subseq`` when ``pval < pv`` (strict).
+
+    Args:
+        triads_obj: Triads object (reserved for future per-residue breakdown).
+        fimo_obj: FIMO hits provider.
+        fasta_file (str): DNA FASTA path.
+        potentials: Statistical potentials by chain.
+        split_potential (str): Potential family key.
+        pval_cutoffs (list): Cutoff keys.
+        dummy_dir (str): Unused; API compatibility.
+        verbose (bool): Unused.
+        binding_site (dict): Dinucleotide -> triad lists for ``get_score_for_subseq``.
+        x3dna_obj: X3DNA helper for dinucleotide mapping.
+
+    Returns:
+        tuple: ``(energies_per_nucleotide, contribution_per_nucleotide)`` keyed by
+        cutoff (contribution remains empty unless the commented block is enabled).
+    """
 
     # Initialize #
     energies_per_nucleotide = {}
@@ -1034,32 +1343,73 @@ def get_energies_for_individual_nucleotides(triads_obj, fimo_obj, fasta_file, po
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for ``binding_profiles.py``.
 
+    How to run:
+        python binding_profiles.py --dummy DUMMY_DIR -i MODEL_DIR -d DNA.fa \\
+            --pdb PDB_DATA --pbm PBM_DATA [-o OUT] [-l LABEL] [-v]
+
+    Configures:
+        ``dummy_dir``, ``input_dir`` (``-i``), ``dna_seq`` (``-d`` FASTA),
+        ``output_dir`` (``-o``), ``pdb_dir`` (``--pdb``), ``pbm_dir`` (``--pbm``),
+        ``label`` (``-l``, suffix for output names), ``verbose`` (``-v``).
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Namespace with the attributes above. Callers must supply
+        ``input_dir``, ``dna_seq``, ``pdb_dir``, and ``pbm_dir`` or
+        ``parser.error`` is invoked.
+
+    Raises:
+        SystemExit: On missing required options (via ``optparse``).
     """
 
-    parser = optparse.OptionParser("python model_protein.py -i input_file -p pdb_dir [--dummy=dummy_dir --n-model=n_model --n-total=n_total -o output_dir] [-a -d -f -m -e -r resolution_file -s --dimer --monomer --unbound_fragments --unrestrictive] [-t] ")
+    parser = optparse.OptionParser(
+        "Usage: binding_profiles.py [--dummy=DUMMY_DIR] -i MODEL_DIR -d DNA.fa "
+        "--pdb PDB_DIR --pbm PBM_DIR [-o OUTPUT_DIR] [-l LABEL] [-v]"
+    )
 
     parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
     parser.add_option("-i", action="store", type="string", dest="input_dir", help="Input directory containing protein models", metavar="{filename}")
-    parser.add_option("-d", action="store", type="string", dest="dna_seq", help="DNA sequence in a fasta file.", metavar="{filename}")     
+    parser.add_option("-d", action="store", type="string", dest="dna_seq", help="DNA sequence in a fasta file.", metavar="{filename}")
     parser.add_option("-o", "--output-dir", default="./", action="store", type="string", dest="output_dir", help="Output directory (default = ./)", metavar="{directory}")
     parser.add_option("--pdb", action="store", type="string", dest="pdb_dir", help="PDB directory (i.e. output dir from pdb.py)", metavar="{directory}")
     parser.add_option("--pbm", action="store", type="string", dest="pbm_dir", help="PBM directory (i.e. output dir from pbm.py)", metavar="{directory}")
     parser.add_option("-l", action="store", type="string", default="", dest="label", help="Label to include in the output models name", metavar="{str}")
-    parser.add_option("-v", "--verbose", default=False, action="store_true", dest="verbose", help="Verbose mode. If not selected the dummy directory will be removed (default = False)", metavar="{boolean}")
-    
+    parser.add_option("-v", "--verbose", default=False, action="store_true", dest="verbose", help="Verbose mode (default = False)", metavar="{boolean}")
+
     (options, args) = parser.parse_args()
 
-    if options.input_dir is None  or options.pdb_dir is None:
+    if options.input_dir is None or options.pdb_dir is None or options.pbm_dir is None or options.dna_seq is None:
         parser.error("missing arguments: type option \"-h\" for help")
 
     return options
 
 
+def main():
+    """
+    CLI entry: score each model against DNA, cluster motifs, and write JSON profiles.
 
-if __name__ == "__main__":
+    Workflow:
+        1. Parse options and create output folders (``pwms/``, ``individual_profiles/``,
+           ``cluster_profiles/``).
+        2. For each split-potential in ``pair`` and ``s3dc_dd`` and for each PMF
+            flag (raw vs z-scored branch from ``pwm_pbm``), load statistical
+            potentials per template, merge chain binding sites for scoring, build
+            the MSA, run FIMO, statistical energy analysis, and per-hit energy lists.
+        3. Cluster motifs with ``cluster_motifs.get_motif_clusters``, merge or
+           average tracks across cluster members, write cluster JSON files, and
+           append one line per cluster to ``clusters.txt``.
+
+    Note:
+        Structural homolog reuse (``structural_homologs_by_chain``) resets when the
+        template id changes between successive models in the input directory.
+
+    Returns:
+        None.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -1076,6 +1426,8 @@ if __name__ == "__main__":
     else:
         input_label = os.path.basename(dna_seq).replace(".fa", "") + "_" + options.label
 
+    _label_for_files = (options.label or "").strip()
+
     # Create output directories #
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
@@ -1089,8 +1441,8 @@ if __name__ == "__main__":
 
     # We define the pvalue thresholds that we will use to define the differents levels of affinity for the TF-DNA interaction #
     pval_cutoffs = sorted([1.0, float(10**-1), float(10**-2), float(10**-3)], key=float, reverse=False)
-    # We define the scoring functions that will be used #
-    potentials = ["pair", "s3dc_dd"]
+    # Split-potential modes to evaluate (do not reuse name ``potentials``; loader returns a dict).
+    split_potential_names = ["pair", "s3dc_dd"]
     pmfs = [True, False]
     # Load the families dictionary #
     families = {}
@@ -1099,16 +1451,17 @@ if __name__ == "__main__":
         pdb_chain, family = line.split(";")
         families[pdb_chain] = family
 
-    # options.split_plotential will be used to compute the pwms for the fimo analysis #
+    # Split-potential name ``pot`` selects the statistical potential and MSA mode for FIMO/PWM naming #
     structural_homologs_by_chain = None
-    for pot in potentials:
+    for pot in split_potential_names:
         for pmf in pmfs:
             # Handle the labeling of the output files #
             if pmf == True:
                 pot_label = pot + "_pmf"
             else:
                 pot_label = pot
-            
+            pot_tag = (pot_label + "_" + _label_for_files) if _label_for_files else pot_label
+
             # Create a PWM for each model #
             motif_list = []
             for model in sorted(os.listdir(input_dir)):
@@ -1158,20 +1511,44 @@ if __name__ == "__main__":
 
                 # This means that these two models don't have the same template, new potentials must be computed #
                 if verbose:sys.stdout.write("Load potentials ..." + str(datetime.datetime.now()) + "\n")
-                if (pot == "s3dc_dd") and (pmf == False):
-                    potentials, thresholds, structural_homologs_by_chain = pwm_pbm.load_statistical_potentials(pdb_obj, os.path.abspath(options.pdb_dir), pbm_dir, families, potential_file_entry=None, split_potential=pot, auto_mode=True, family_potentials=False, pbm_potentials=False, score_threshold=False, taylor_approach=False, pmf_approach=pmf, known_pdb=False, structural_homologs_by_chain=structural_homologs_by_chain,  dummy_dir=dummy_dir, verbose=verbose)
-                else:
-                    potentials, thresholds, structural_homologs_by_chain = pwm_pbm.load_statistical_potentials(pdb_obj, os.path.abspath(options.pdb_dir), pbm_dir, families, potential_file_entry=None, split_potential=pot, auto_mode=False, family_potentials=False, pbm_potentials=False, score_threshold=False, taylor_approach=False, pmf_approach=pmf, known_pdb=False, structural_homologs_by_chain=structural_homologs_by_chain,  dummy_dir=dummy_dir, verbose=verbose)
+                auto_mode_eff = True if ((pot == "s3dc_dd") and (not pmf)) else False
+                potentials, thresholds, radii, structural_homologs_by_chain = pwm_pbm.load_statistical_potentials(
+                    pdb_obj,
+                    os.path.abspath(options.pdb_dir),
+                    pbm_dir,
+                    families,
+                    0.0,
+                    potential_file_entry=None,
+                    split_potential=pot,
+                    auto_mode=auto_mode_eff,
+                    family_potentials=False,
+                    pbm_potentials=False,
+                    score_threshold=False,
+                    taylor_approach=False,
+                    pmf_approach=pmf,
+                    known_pdb=False,
+                    structural_homologs_by_chain=structural_homologs_by_chain,
+                    dummy_dir=dummy_dir,
+                    verbose=verbose,
+                )
+
+                merged_binding_site = {}
+                for pdb_chain in sorted(potentials.keys()):
+                    _, bs = pwm_pbm.get_scores_and_binding_site(
+                        triads_obj, x3dna_obj, potentials, radii, None, None, pot, pdb_chain
+                    )
+                    for dinuc, triad_list in bs.items():
+                        merged_binding_site.setdefault(dinuc, []).extend(triad_list)
 
                 if verbose:sys.stdout.write("Build MSA ...\n")
-                msa_obj = pwm_pbm.get_msa_obj(triads_obj, x3dna_obj, potentials, 0, None, None, pot, thresholds)
+                msa_obj = pwm_pbm.get_msa_obj(triads_obj, x3dna_obj, potentials, radii, None, None, pot, thresholds)
 
                 # Get the data per nucleotide #
                 motif_label = motif_name + "_" + pot_label
                 matches_per_nucleotide, fimo_obj = perform_match_analysis(msa_obj, dna_seq, motif_label, output_dir, dummy_dir, pval_cutoffs, verbose=verbose)
                 scores_per_nucleotide, logpval_per_nucleotide = perform_fimo_analysis(fimo_obj, dna_seq, pval_cutoffs, verbose)
-                energies_per_nucleotide, energies_per_nucleotide_raw = perform_energy_analysis(msa_obj, x3dna_obj, binding_profile, dna_seq, triads_obj, potentials, dummy_dir, fimo_obj, pval_cutoffs, pot, verbose)
-                energies_per_individual_nucleotide, contribution_per_individual_nucleotide = get_energies_for_individual_nucleotides(triads_obj, fimo_obj, dna_seq, potentials, pot, pval_cutoffs, dummy_dir, verbose)
+                energies_per_nucleotide, energies_per_nucleotide_raw = perform_energy_analysis(msa_obj, x3dna_obj, merged_binding_site, dna_seq, triads_obj, potentials, dummy_dir, fimo_obj, pval_cutoffs, pot, verbose)
+                energies_per_individual_nucleotide, contribution_per_individual_nucleotide = get_energies_for_individual_nucleotides(triads_obj, fimo_obj, dna_seq, potentials, pot, pval_cutoffs, dummy_dir, verbose, merged_binding_site, x3dna_obj)
                 
                 # Append individual dictionaries of nucleotide data to a list, they will be merged afterwards #
                 motif["complete_meme_pwm"] = os.path.join(output_dir, "pwms", motif_label + ".meme.s")
@@ -1186,13 +1563,13 @@ if __name__ == "__main__":
                 motif["IC"] = pwm_pbm.get_pwm_informativity(motif["complete_meme_pwm"])
                 
                 # Save the individual profiles as json files #
-                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "FIMO_matches_" + motif["pdb_name"] + "_" +  pot_label + "_" + options.label + ".json"), matches_per_nucleotide)
-                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "FIMO_scores_" + motif["pdb_name"] + "_" + pot_label + "_" + options.label + ".json"), scores_per_nucleotide)
-                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "FIMO_logpval_" + motif["pdb_name"] + "_" + pot_label + "_" + options.label + ".json"), logpval_per_nucleotide)
-                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "energies_" + motif["pdb_name"] + "_" + pot_label + "_" + options.label + ".json"), energies_per_nucleotide)
-                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "energies_raw_" + motif["pdb_name"] + "_" + pot_label + "_" + options.label + ".json"), energies_per_nucleotide_raw)
-                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "individual_energies_" + motif["pdb_name"] + "_" + pot_label + "_" + options.label + ".json"), energies_per_individual_nucleotide)
-                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "individual_energies_contribution_" + motif["pdb_name"] + "_" + pot_label + "_" + options.label + ".json"), contribution_per_individual_nucleotide)
+                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "FIMO_matches_" + motif["pdb_name"] + "_" + pot_tag + ".json"), matches_per_nucleotide)
+                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "FIMO_scores_" + motif["pdb_name"] + "_" + pot_tag + ".json"), scores_per_nucleotide)
+                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "FIMO_logpval_" + motif["pdb_name"] + "_" + pot_tag + ".json"), logpval_per_nucleotide)
+                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "energies_" + motif["pdb_name"] + "_" + pot_tag + ".json"), energies_per_nucleotide)
+                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "energies_raw_" + motif["pdb_name"] + "_" + pot_tag + ".json"), energies_per_nucleotide_raw)
+                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "individual_energies_" + motif["pdb_name"] + "_" + pot_tag + ".json"), energies_per_individual_nucleotide)
+                functions.dumpJSON(os.path.join(output_dir, "individual_profiles", "individual_energies_contribution_" + motif["pdb_name"] + "_" + pot_tag + ".json"), contribution_per_individual_nucleotide)
                 
                 # Append the motif to the motif_list #
                 motif_list.append(motif)
@@ -1240,13 +1617,13 @@ if __name__ == "__main__":
                 contribution_per_individual_nucleotide_global = average_scores(contribution_per_individual_nucleotide_global, pval_cutoffs)
                 
                 # Store the data in jsons #
-                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "FIMO_matches_cluster" + str(i) + "_" + pot_label + "_" + options.label + ".json"), matches_per_nucleotide_global)
-                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "FIMO_scores_cluster" + str(i) + "_" + pot_label + "_" + options.label + ".json"), scores_per_nucleotide_global)
-                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "FIMO_logpval_cluster" + str(i) + "_" + pot_label + "_" + options.label + ".json"), logpval_per_nucleotide_global)
-                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "energies_cluster" + str(i) + "_" + pot_label + "_" + options.label + ".json"), energies_per_nucleotide_global)
-                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "energies_raw_cluster" + str(i) + "_" + pot_label + "_" + options.label + ".json"), energies_per_nucleotide_raw_global)
-                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "individual_energies_cluster" + str(i) + "_" + pot_label + "_" + options.label + ".json"), energies_per_individual_nucleotide_global)
-                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "individual_energies_contribution_cluster" + str(i) + "_" + pot_label + "_" + options.label + ".json"), contribution_per_individual_nucleotide_global)
+                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "FIMO_matches_cluster" + str(i) + "_" + pot_tag + ".json"), matches_per_nucleotide_global)
+                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "FIMO_scores_cluster" + str(i) + "_" + pot_tag + ".json"), scores_per_nucleotide_global)
+                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "FIMO_logpval_cluster" + str(i) + "_" + pot_tag + ".json"), logpval_per_nucleotide_global)
+                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "energies_cluster" + str(i) + "_" + pot_tag + ".json"), energies_per_nucleotide_global)
+                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "energies_raw_cluster" + str(i) + "_" + pot_tag + ".json"), energies_per_nucleotide_raw_global)
+                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "individual_energies_cluster" + str(i) + "_" + pot_tag + ".json"), energies_per_individual_nucleotide_global)
+                functions.dumpJSON(os.path.join(output_dir, "cluster_profiles", "individual_energies_contribution_cluster" + str(i) + "_" + pot_tag + ".json"), contribution_per_individual_nucleotide_global)
                 
                 # Write the cluster's file #
                 clusters_file = os.path.join(output_dir, "clusters.txt")
@@ -1256,4 +1633,8 @@ if __name__ == "__main__":
                     mot_in_cluster.append(motif["pdb_name"])
                 cf.write("Cluster " + str(i) + ": " + ";".join(mot_in_cluster) + "\n")
                 cf.close()
+
+
+if __name__ == "__main__":
+    main()
 

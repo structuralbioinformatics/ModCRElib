@@ -1,3 +1,10 @@
+"""
+Query TFinDit and infer TF/TF-homolog status per PDB entry.
+
+Downloads (and caches) per-PDB TFinDit pages, then recursively follows homolog
+links to classify entries as direct TF, TF-homolog, or unclassified.
+"""
+
 import os, sys, re
 import configparser
 import optparse
@@ -34,9 +41,15 @@ from ModCRElib.beans import functions
 #-------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse CLI options for TFinDit classification.
+
+    How to run:
+        ``python tfindit.py --pdb pdb_dir -o output_dir [-v]``
+
+    Returns:
+        optparse.Values: Namespace with PDB folder, output folder, and verbosity.
+    """
 
     parser = optparse.OptionParser("python tfindit.py -p pdb_dir [--dummy dummy_dir -o output_dir -t tfindit_file -v]")
 
@@ -53,6 +66,13 @@ def parse_options():
     return options
 
 def get_tfindit_file(pdb_name, filename):
+    """
+    Download one TFinDit page and persist it locally.
+
+    Args:
+        pdb_name (str): Four-letter PDB id.
+        filename (str): Destination text file.
+    """
     # Initialize #
     content = get_tfindit_content(pdb_name)
 
@@ -60,6 +80,15 @@ def get_tfindit_file(pdb_name, filename):
         functions.write(filename, content.read())
 
 def get_tfindit_content(pdb_name):
+    """
+    Retrieve raw TFinDit HTTP content with retry logic.
+
+    Args:
+        pdb_name (str): Four-letter PDB id.
+
+    Returns:
+        HTTPResponse | None: Open URL response or ``None`` after retries.
+    """
     # Initialize #
     content = None
     trials = 0
@@ -77,6 +106,18 @@ def get_tfindit_content(pdb_name):
     return content
 
 def recursive_search_tf_homolog_pdb_chains_in_tfindit(pdb_name, file_name, level, fathers=set()):
+    """
+    Recursively inspect TFinDit homolog links to assign TF status.
+
+    Args:
+        pdb_name (str): Current PDB id.
+        file_name (str): Cached TFinDit file for ``pdb_name``.
+        level (int): Recursion depth (0 = direct TF check).
+        fathers (set): Already-visited PDB ids.
+
+    Returns:
+        str | None: ``"TF"``, ``"TF-homolog"``, or ``None``.
+    """
     # Initialize #
     search = set()
 
@@ -109,7 +150,7 @@ def recursive_search_tf_homolog_pdb_chains_in_tfindit(pdb_name, file_name, level
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse options and ensure output folder exists.
     options = parse_options()
 
     # Create output directory #
@@ -117,7 +158,7 @@ if __name__ == "__main__":
         if not os.path.exists(options.output_dir):
             os.makedirs(options.output_dir)
  
-    # For each PDB entry... #
+    # Step 2) Download/cache TFinDit pages for all PDB entries.
     for pdb_file in os.listdir(options.pdb_dir):
         # Initialize #
         pdb_name = pdb_file[:4].lower()
@@ -129,7 +170,7 @@ if __name__ == "__main__":
         # Get TFinDit file #
         get_tfindit_file(pdb_name, tfindit_file)
 
-    # Initialize #
+    # Step 3) Classify each PDB recursively as TF / TF-homolog / none.
     tfindit = {}
     # For each PDB entry... #
     for pdb_file in os.listdir(options.pdb_dir):
@@ -142,7 +183,7 @@ if __name__ == "__main__":
         # Recursively find if is TF #
         tfindit.setdefault(pdb_name, recursive_search_tf_homolog_pdb_chains_in_tfindit(pdb_name, tfindit_file, 0))
 
-    # Create output file #
+    # Step 4) Export non-empty classifications.
     output_file = os.path.join(os.path.abspath(options.output_dir), "tfindit.txt")
     functions.write(output_file, "#PDB;status")
     # For each PDB entry... #

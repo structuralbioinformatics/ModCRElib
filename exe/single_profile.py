@@ -1,3 +1,12 @@
+"""
+Run one DNA-binding profile calculation for a single model or threading file.
+
+This script is the single-job entrypoint used by batch profilers and manual
+CLI runs. It parses the scoring options, dispatches the requested profile
+workflow, and writes the resulting profile in pickle, CSV, and optional plot
+formats.
+"""
+
 import os, sys, re
 from collections import Counter
 import configparser
@@ -48,9 +57,39 @@ from ModCRElib.profile import profile as PROFILE
 #-------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse command-line options for a single profile calculation.
+
+    How to run:
+        python single_profile.py [--dummy DUMMY_DIR] -i INPUT_FILE -d DNA_FASTA
+            [--pbm PBM_DIR --pdb PDB_DIR -o OUTPUT_NAME --output_dir OUT_DIR]
+            [--threading --model_accuracy --plot -v]
+            [statistical potential options]
+
+    Example:
+        python single_profile.py -i model.pdb -d dna.fa --pbm pbm_data
+            --pdb pdb_data -o profile_A --plot -v
+
+    The parser configures:
+        - Input structure or threading file and DNA FASTA target.
+        - PBM/PDB resources, output destination, and info logging.
+        - Execution mode flags (threading/model accuracy/save/plot).
+        - Statistical-potential controls for profile and PWM/FIMO scoring.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options covering the input model or
+        threading file, DNA FASTA file, output settings, and statistical
+        potential configuration.
+
+    Raises:
+        SystemExit: Triggered by ``OptionParser`` when required arguments are
+        missing or invalid.
+        Exception: Raised when the split-potential argument has an invalid
+        value after parsing.
+    """
 
     parser = optparse.OptionParser("Usage: single_profile.py [--dummy=DUMMY_DIR] -i INPUT_FILE -d DNA_FASTA [-l LABEL -o OUTPUT_NAME --output_dir OUTPUT_DIR --info INFO_FILE] --pbm=PBM_dir --pdb=PDB_DIR [-v --save --plot --meme --reset] [--model_accuracy]  [-a -f -p -s SPLIT_POTENTIAL -e ENERGY_PROFILE -t THRESHOLD -k -b --taylor --file POTENTIAL --radius RADIUS --fragment FRAGMENT]")
 
@@ -109,9 +148,24 @@ def parse_options():
 # Main        #
 #-------------#
 
-if __name__ == "__main__":
+def main():
+    """
+    Run a single profile-calculation workflow and write its outputs.
 
-# Arguments & Options #
+    Workflow:
+        1. Parse command-line arguments and resolve all input and output paths.
+        2. Load family annotations and statistical-potential configuration.
+        3. Execute the requested profile workflow for either a PDB structure or
+           a threading file.
+        4. Write the resulting profile as pickle and CSV output, plus optional
+           plots.
+        5. Record success or failure in the selected information stream.
+
+    Returns:
+        None. Results are written to the selected output directory.
+    """
+
+    # Arguments & Options #
     options = parse_options()
     verbose = options.verbose
     threading = options.threading
@@ -210,20 +264,15 @@ if __name__ == "__main__":
          else:
             profile=PROFILE.calculate_single_profile_by_thread(dna_file,fimo_thresholds,energy_profile,pdb_file,output_file,pbm_dir,pdb_dir,families,potential_file, radius,fragment_restrict, binding_restrict, split_potential,auto_mode,family_potentials,pbm_potentials,score_threshold,taylor_approach,pmf,bins,known,meme,reset, refine, dummy_dir,verbose,save,methylation)
 
-# Write outputs
-      # Name the files
+      # Write outputs
       output = output_file
-      # Write profile in pickle format
       if functions.fileExist(output+".pickle"): os.remove(output+".pickle")
       out=open(output+".pickle","wb")
       pickle.dump(profile,out)
       out.close()
-      # Write table in CSV format
       if functions.fileExist(output+".csv"): os.remove(output+".csv")
       profile.write_table(output+".csv")
-      # Plot profiles
       if plot: profile.plot(output)
-      # Write information of success
       info.write("%s\tDONE\n"%output_name)
       info.flush()
    
@@ -234,9 +283,11 @@ if __name__ == "__main__":
       sys.stderr.write("ERROR %s"%e)
 
 
+if __name__ == "__main__":
+    main()
+
+
 
 
       
-
-
 

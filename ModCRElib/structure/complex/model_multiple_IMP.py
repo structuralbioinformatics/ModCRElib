@@ -45,6 +45,15 @@ python = os.path.join(config.get("Paths", "python_path"), "python")
 
 
 def get_time():
+    """
+    Return the current wall-clock timestamp string.
+
+    Args:
+        None.
+
+    Returns:
+        str: Timestamp formatted as `DD/MM/YYYY HH:MM:SS`.
+    """
 
     from datetime import datetime
     now = datetime.now()
@@ -56,12 +65,17 @@ def get_time():
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse command-line options for batch IMP modelling runs.
 
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options for batch execution, queueing,
+        reuse policy, and logging.
     """
 
-    parser = optparse.OptionParser("python model_multiple_IMP.py -i input_folder  -o output [--info log_file --dummy dummy_dir  --reuse  --parallel --verbose ]")
+    parser = optparse.OptionParser("python model_multiple_IMP.py -i INPUT_FOLDER -o OUTPUT [--info LOG_FILE --dummy DUMMY_DIR --reuse --parallel --verbose]")
 
     parser.add_option("-i", action="store", type="string", dest="input_folder", default=None, help="Input folder, contains the inputs orftopology and restraints to model macro-complexes", metavar="{directory}")
     parser.add_option("-o", action="store", type="string", dest="output", default=None, help="Output folder rootname  ", metavar="{directory}")
@@ -86,6 +100,18 @@ def parse_options():
 #-------------#
 
 if __name__ == "__main__":
+    """
+    Main workflow for batch IMP modelling.
+
+    It discovers valid model definitions in the input folder, dispatches each
+    model (locally or via queue), and monitors completion using the info log.
+
+    Args:
+        None.
+
+    Returns:
+        None. Model jobs are executed/submitted and tracked via the log file.
+    """
 
     # Arguments & Options #
     options   = parse_options()

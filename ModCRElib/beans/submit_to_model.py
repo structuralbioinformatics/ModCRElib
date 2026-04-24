@@ -1,3 +1,10 @@
+"""
+Batch submitter for ``model_protein.py`` over FASTA entries.
+
+Generates one temporary FASTA per sequence and executes modeling either locally
+or through the configured queue system.
+"""
+
 import os, sys, re
 import configparser
 import optparse
@@ -32,9 +39,13 @@ from SBILib.structure.chain import Chain
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for batch ``model_protein.py`` submission.
 
+    The script iterates over FASTA records, writes one temporary FASTA per TF,
+    and runs/submits modeling jobs with selected template/filter flags.
+
+    Returns:
+        optparse.Values: Parsed namespace with modeling and queue options.
     """
 
     parser = optparse.OptionParser("python submit_to_model.py -p pdb_dir -i fasta_file [--dummy=dummy_dir -o output_dir --parallel -v]")

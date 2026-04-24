@@ -1,5 +1,10 @@
+"""
+Build TF candidate dictionaries by intersecting CIS-BP, UniProt, and PDB mappings.
+"""
+
 import os, sys, re
 import configparser
+import pandas as pd
 import hashlib
 import optparse
 
@@ -34,9 +39,15 @@ from ModCRElib.builder import TFinderSelect
 #-------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse CLI options for TF selection (version 2 workflow).
+
+    How to run:
+        ``python tfinder2.py -p proteins.sql --pdb pdb_dir --map idmapping.dat -t tfs.sql -f tf_families.sql -u uniprot.fasta``
+
+    Returns:
+        optparse.Values: Namespace with CIS-BP, mapping, and output inputs.
+    """
 
     parser = optparse.OptionParser("python tfinder.py -p proteins_file --pdb=pdb_dir -t tfs_file -u uniprot_file [--dummy dummy_dir -o output_dir -v]")
 
@@ -53,7 +64,7 @@ def parse_options():
 
     (options, args) = parser.parse_args()
 
-    if options.proteins_file is None or options.pdb_dir is None or options.tfs_file is None or options.map_file is None or options.uniprot_file is None or options.family_file is None:
+    if options.proteins_file is None or options.pdb_dir is None  or options.tfs_file is None or options.map_file is None or options.uniprot_file is None or options.family_file is None:
         parser.error("missing arguments: type option \"-h\" for help")
 
     return options
@@ -64,25 +75,45 @@ def parse_options():
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse options and initialize output directories.
     options = parse_options()
 
     # Create output directory #
     if not os.path.exists(options.output_dir):
         os.makedirs(options.output_dir)
 
-    # Initialize #
+    # Step 2) Build PDB->UniProt mapping dictionary (cached in pdb.txt).
+    uniprot_dict_full = os.path.join(os.path.abspath(options.output_dir), "uniprot_full.txt")
+    cisbp_dict_full = os.path.join(os.path.abspath(options.output_dir), "cisbp_full.txt")
+    pdb_dict_file = os.path.join(os.path.abspath(options.output_dir), "pdb.txt")
+    if not os.path.exists(uniprot_dict_full) or not os.path.exists(cisbp_dict_full) or not os.path.exists(pdb_dict_file):
+      map_pdb_sp={}
+      map_sp_name={}
+      map_name_sp={}
+      map_pdb_set=set()
+      idmap=open(options.map_file,"r")
+      for line in idmap:
+            data_id=line.strip().split()
+            if data_id[1]=="PDB":
+               #print("Found UniProtKB-ID with PDB",data_id[0],data_id[2])
+               map_pdb_sp.setdefault(data_id[2].lower(),set()).add(data_id[0])
+               map_pdb_set.add(data_id[0])
+      idmap.close() 
+      print("Total of proteins with PDB code",len(map_pdb_set))      
+      idmap=open(options.map_file,"r")
+      for line in idmap:
+            data_id=line.strip().split()
+            if (data_id[1]=="UniProtKB-ID") and data_id[0] in map_pdb_set:
+               #print("Found UniProtKB-ID with PDB",data_id[0],data_id[2])
+               map_sp_name.setdefault(data_id[0].upper(),set()).add(data_id[2].upper())
+               map_name_sp.setdefault(data_id[2].upper(),set()).add(data_id[0].upper())
+      idmap.close()       
+      print("Total of proteins with PDB code and UniProtKB-ID",len(map_name_sp.keys()))      
     pdb = {}
     pdball = set()
     pdb_dict_file = os.path.join(os.path.abspath(options.output_dir), "pdb.txt")
     # Skip if dict file already exists #
     if not os.path.exists(pdb_dict_file):
-        map_pdb_sp={}
-        idmap=open(options.map_file,"r")
-        for line in idmap:
-            data_id=line.strip().split()
-            if data_id[1]=="PDB":
-               map_pdb_sp.setdefault(data_id[2].lower(),set()).add(data_id[0])
         # For each PDB file... #
         for pdb_file in os.listdir(os.path.abspath(options.pdb_dir)):
             # For each line... #
@@ -94,10 +125,10 @@ if __name__ == "__main__":
                 m = re.search("^DBREF\s+(\S{4})\s+(\S).+UNP\s+(\S{6}).+", line)
                 if m:
                     pdb.setdefault((m.group(1).lower(), m.group(2)), set())
-                    pdb[(m.group(1).lower(), m.group(2))].add(m.group(3))
+                    pdb[(m.group(1).lower(), m.group(2))].add(m.group(3).upper())
                     if "bundle" in pdb_file: 
-                        if pdb_file.endswith("pdb"): pdb[pdb_file.rstrip(".pdb").lower(), m.group(2)].add(m.group(3))
-                        if pdb_file.endswith("pdb1"): pdb[pdb_file.rstrip(".pdb1").lower(), m.group(2)].add(m.group(3))
+                        if pdb_file.endswith("pdb"): pdb[pdb_file.rstrip(".pdb").lower(), m.group(2)].add(m.group(3).upper())
+                        if pdb_file.endswith("pdb1"): pdb[pdb_file.rstrip(".pdb1").lower(), m.group(2)].add(m.group(3).upper())
                     if m.group(1).lower() in map_pdb_sp:
                         pdb[(m.group(1).lower(), m.group(2))].update(map_pdb_sp.get(m.group(1).lower()))
                         if "bundle" in pdb_file: 
@@ -108,11 +139,13 @@ if __name__ == "__main__":
             functions.write(pdb_dict_file, "%s;%s" % (",".join([pdb_name.lower(), pdb_chain]), ",".join(sorted(pdb[(pdb_name, pdb_chain)]))))
             pdball.add((pdb_name.lower(),pdb_chain))
     else:
+        print("Open file %s"%pdb_dict_file)
         for line in functions.parse_file(pdb_dict_file):
             key, value = line.split(";")
             pdball.add(tuple(key.split(",")))
             print("PDB in TFS ",key)
             pdb.setdefault(tuple(key.split(",")), set(value.split(",")))
+    print("Dictionary PDB",pdb)
     for pdb_file in os.listdir(os.path.abspath(options.pdb_dir)):
       if pdb_file[-3:] == "pdb" or  pdb_file[-4:] == "pdb1":
         pdb_name=pdb_file[0:4]
@@ -122,15 +155,14 @@ if __name__ == "__main__":
                pdball.add((pdb_name.lower(),None))
     print("PDB length",len([k for k in pdb.keys()])) 
     print("PDB codes",[k for k in pdb.keys()])
-    print(pdb)
     for pdb_name, pdb_chain in sorted(pdb): 
-        print("PDB SORTED",pdb_name, pdb_chain)
+        print("PDB SORTED",pdb_name, pdb_chain," Uniprot ",pdb[(pdb_name, pdb_chain)])
     
-    # Initialize #
+    # Step 3) Collect UniProt accession universe referenced by PDB chains.
     uniaccs = set()
     for key in pdb:
         for uniacc in pdb[key]:
-            uniaccs.add(uniacc)
+            uniaccs.add(uniacc.upper())
 
     print("Uniprot size", len(uniaccs))
     print("Uniprot codes", uniaccs)
@@ -142,6 +174,14 @@ if __name__ == "__main__":
         if m:           
             cisbp_families.setdefault(m.group(1).upper(),set()).add(m.group(2))
             print("Add family ",m.group(1).upper(),m.group(2))
+        else:
+           m = re.search(r"\('([^']*)','([^']*)','([^']*)',(\d+),([\d.]+),'([^']*)','([^']*)'\)",line)
+           if m:           
+             cisbp_families.setdefault(m.group(1).upper(),set()).add(m.group(2))
+             print("Add family ",m.group(1).upper(),m.group(2))
+           else:
+             print("SKIP Family line",line)
+
     # Initialize #
     cisbp = {}
     cisbp_full = {}
@@ -152,27 +192,41 @@ if __name__ == "__main__":
         # Initialize
         species = {}
         families = {}
+        tf_name_cisbp={}
         # For each line... #
         for line in functions.parse_file(os.path.abspath(options.tfs_file)):
             #print line
-            m = re.search("\('(.+)', '(.+)', '.+', '.+', '.+', '(.+)', '[DIN]'\),*", line)
+            m = re.search("\('(.+)', '(.+)', '.+', '.+', '(.+)', '(.+)', '[DIN]'\),*", line)
             #print m
             if m:
-                species.setdefault(m.group(1), set()).add(m.group(3).replace("_", " ").upper())
+                species.setdefault(m.group(1), set()).add(m.group(4).replace("_", " ").upper())
+                tf_name_cisbp.setdefault(m.group(1), set()).add(m.group(3).upper())
                 if options.cisbp_family:
                   families.setdefault(m.group(1).upper(), set()).add(m.group(2).upper())
-                  print("Add TF on CISBP ",m.group(1).upper(),m.group(2).upper(),species[m.group(1)])
+                  #print("Add TF on CISBP ",m.group(1).upper(),m.group(2).upper(),species[m.group(1)])
                 else:
                   families.setdefault(m.group(1).upper(), set()).update(cisbp_families[m.group(2).upper()])
-                  print("Add TF on CISBP ",m.group(1).upper(),m.group(2).upper(),cisbp_families[m.group(2).upper()],species[m.group(1)])
+                  #print("Add TF on CISBP ",m.group(1).upper(),m.group(2).upper(),cisbp_families[m.group(2).upper()],species[m.group(1)])
             else:
-                print("SKIP TF on CISBP ",line)
+                m = re.search(r"\('([^']*)','([^']*)','[^']*','[^']*','([^']*)','([^']*)','([DIN])'\),",line)
+                if m:
+                  species.setdefault(m.group(1), set()).add(m.group(4).replace("_", " ").upper())
+                  tf_name_cisbp.setdefault(m.group(1), set()).add(m.group(3).upper())
+                  if options.cisbp_family:
+                    families.setdefault(m.group(1).upper(), set()).add(m.group(2).upper())
+                    #print("Add TF on CISBP ",m.group(1).upper(),m.group(2).upper(),species[m.group(1)])
+                  else:
+                    families.setdefault(m.group(1).upper(), set()).update(cisbp_families[m.group(2).upper()])
+                    #print("Add TF on CISBP ",m.group(1).upper(),m.group(2).upper(),cisbp_families[m.group(2).upper()],species[m.group(1)])
+                else:
+                  print("SKIP TF on CISBP ",line)
         # For each line... #
+        print("TF_NAME_CIS",tf_name_cisbp)
         n_pid=0
         missing_p={}
         missing_t={}
         for line in functions.parse_file(os.path.abspath(options.proteins_file)):
-            m = re.search("\('(.+)', '(.+)', '.+', '.+', '(.+)'\),*", line)
+            m = re.search("\('(.+)', '(.+)', '(.+)', '.+', '(.+)'\),*", line)
             if m:
                 print("PROTEIN FOR TF", m.group(2))
                 n_pid = n_pid + 1
@@ -181,7 +235,15 @@ if __name__ == "__main__":
                     missing_t.setdefault(m.group(2),set()).add( m.group(1))
                     continue
                 print("  -- accept TF protein ID", m.group(1))
-                sequence = m.group(3)
+                sequence = m.group(4)
+                #tf_name  = m.group(3)
+                if m.group(2) in tf_name_cisbp: 
+                   tf_names=tf_name_cisbp[m.group(2)]
+                else:
+                   print("  -- Not accepted TF_ID",m.group(2))
+                   missing_p.setdefault(m.group(1),set()).add( m.group(2))
+                   missing_t.setdefault(m.group(2),set()).add( m.group(1))
+                   continue
                 if sequence.endswith("*"):
                     sequence = sequence[:-1]
                 h = hashlib.new('md5')
@@ -190,8 +252,37 @@ if __name__ == "__main__":
                 print("  -- SPECIES", species[m.group(2)])
                 for specie in species[m.group(2)]:
                     cisbp.setdefault((md5, specie), set()).add(m.group(2))
-                    cisbp_full.setdefault(tuple([md5, specie]), (sequence,m.group(1)))
+                    for tf_name in tf_names:
+                        cisbp_full.setdefault(tuple([md5, specie]), set()).add(tuple([sequence,m.group(2),tf_name]))
             else:
+              m = re.search(r"\('([^']*)','([^']*)','([^']*)','[^']*','([^']*)'\),",line)
+              if m:
+                print("PROTEIN FOR TF", m.group(2))
+                n_pid = n_pid + 1
+                if m.group(2) not in [x for x in species.keys()]: 
+                    missing_p.setdefault(m.group(1),set()).add( m.group(2))
+                    missing_t.setdefault(m.group(2),set()).add( m.group(1))
+                    continue
+                print("  -- accept TF protein ID", m.group(1))
+                sequence = m.group(4)
+                if m.group(2) in tf_name_cisbp: 
+                   tf_names=tf_name_cisbp[m.group(2)]
+                else:
+                   print("  -- Not accepted TF_ID",m.group(2))
+                   missing_p.setdefault(m.group(1),set()).add( m.group(2))
+                   missing_t.setdefault(m.group(2),set()).add( m.group(1))
+                   continue
+                if sequence.endswith("*"):
+                    sequence = sequence[:-1]
+                h = hashlib.new('md5')
+                h.update(sequence.encode())
+                md5 = h.hexdigest() + sequence[:4] + sequence[-4:]
+                print("  -- SPECIES", species[m.group(2)])
+                for specie in species[m.group(2)]:
+                    cisbp.setdefault((md5, specie), set()).add(m.group(2))
+                    for tf_name in tf_names:
+                        cisbp_full.setdefault(tuple([md5, specie]), set()).add(tuple([sequence,m.group(2),tf_name]))
+              else:
                 print("SKIP PROTEIN ",line)
         print("Total proteins",n_pid)
         print("Total TFs",len([x for x in species.keys()]))
@@ -207,15 +298,17 @@ if __name__ == "__main__":
             functions.write(cisbp_dict_file, "%s;%s" % (",".join([md5, specie]), ",".join(sorted(cisbp[(md5, specie)]))))
         if not os.path.exists(cisbp_dict_full):
            for md5, specie in sorted(cisbp_full):
-            functions.write(cisbp_dict_full, "%s;%s" % (",".join([md5, specie]), ",".join(cisbp_full[(md5, specie)])))
+               for stt in  sorted(cisbp_full[(md5, specie)]):
+                   functions.write(cisbp_dict_full, "%s;%s" % (",".join([md5, specie]), ",".join(stt)))
     else:
         for line in functions.parse_file(cisbp_dict_file):
             key, value = line.split(";")
             cisbp.setdefault(tuple(key.split(",")), set(value.split(",")))
         for line in functions.parse_file(cisbp_dict_full):
             key, value = line.split(";")
-            cisbp_full.setdefault(tuple(key.split(",")), tuple((value.split(","))))
-        
+            cisbp_full.setdefault(tuple(key.split(",")),set()).add(tuple((value.split(","))))
+    print("CISBP",   cisbp)
+    print("CISBP_FULL",   cisbp_full)
     print("Total of proteins of TFs accepted",len([x for x in cisbp.keys()]))
     total_tfs=set()
     for k,v in cisbp.items():
@@ -254,13 +347,13 @@ if __name__ == "__main__":
             else:
               mn = re.search("\S+\|(\S+)\|.+OS=(.+) GN=.+ PE=.+ SV=.+", header)
               if mn:
-                uniacc = mn.group(1)
+                uniacc = mn.group(1).upper()
                 specie_list = mn.group(2).upper().split()
                 specie=" ".join(specie_list[0:2])
               else:
                 mx= re.search("\S+\|(\S+)\|.+OS=(.+) OX=.+ PE=.+ SV=.+", header)
                 if mx:
-                  uniacc = mx.group(1)
+                  uniacc = mx.group(1).upper()
                   specie_list = mx.group(2).upper().split()
                   specie=" ".join(specie_list[0:2])
                 else:
@@ -273,51 +366,79 @@ if __name__ == "__main__":
                 h.update(sequence.encode())
                 md5 = h.hexdigest() + sequence[:4] + sequence[-4:]
                 uniprot.setdefault(uniacc, tuple([md5, specie]))
-                uniprot_full.setdefault(tuple([md5, specie]), (sequence,uniacc))
-                print("Add in UNIPROT",uniacc)
+                tf_name_set=set()
+                if uniacc.upper() in map_sp_name: tf_name_set=map_sp_name[uniacc.upper()]
+                for tf_name in tf_name_set:
+                    for uniacc_name in map_name_sp[tf_name]:
+                        uniprot_full.setdefault(tuple([md5, specie]), set()).add((sequence,uniacc_name,tf_name))
+                        #print("Add in UNIPROT",uniacc_name,tf_name)
         for uniacc in sorted(uniprot):
-            functions.write(uniprot_dict_file, "%s;%s" % (uniacc, ",".join(uniprot[uniacc])))
+            functions.write(uniprot_dict_file, "%s;%s" % (uniacc.upper(), ",".join(uniprot[uniacc])))
         for md5, specie in uniprot_full:
-            functions.write(uniprot_dict_full, "%s;%s" % (",".join([md5, specie]), ",".join(uniprot_full[tuple([md5, specie])])))
+            for sut in uniprot_full[tuple([md5, specie])]:
+                functions.write(uniprot_dict_full, "%s;%s" % (",".join([md5, specie]), ",".join(sut)))
     else:
-        if not os.path.exists(uniprot_dict_file):
+        if os.path.exists(uniprot_dict_file):
            for line in functions.parse_file(uniprot_dict_file):
-            key, value = line.split(";")
-            uniprot.setdefault(key, tuple(value.split(",")))
-        if not os.path.exists(uniprot_dict_full):
+             key, value = line.split(";")
+             uniprot.setdefault(key, tuple(value.split(",")))
+             #print("Add UNIPROT",key,tuple(value.split(",")))
+        else:
+           print("Not found file %s"%uniprot_dict_file)
+           exit()
+        if os.path.exists(uniprot_dict_full):
            for line in functions.parse_file(uniprot_dict_full):
-            key, value = line.split(";")
-            uniprot_full.setdefault(tuple(key.split(",")), tuple(value.split(",")))
+             key, value = line.split(";")
+             uniprot_full.setdefault(tuple(key.split(",")), set()).add(tuple(value.split(",")))
+             #print("Add UNIPROT FULL",tuple(key.split(",")),tuple(value.split(",")))
+        else:
+           print("Not found file %s"%uniprot_dict_full)
+           exit()
 
 
-    
+
+    print("DONE UNIPROT PARSING") 
     # Initialize #
     tfs = {}
     tfs_cisbp = set()
     tfs_dict_file = os.path.join(os.path.abspath(options.output_dir), "tfs_cisbp.txt")
     # Skip if dict file already exists #
     if not os.path.exists(tfs_dict_file):
+        print("Generating tfs_cisbp.txt")
         #Read again TF families if families dictionary is empty
         refill=False
         try:
          if len(families.items()) < 1: refill=True
         except:
+         print("Not found families")
          refill=True
         if refill:
          families = {}
+         tf_name_cisbp={}
          # For each line... #
          for line in functions.parse_file(os.path.abspath(options.tfs_file)):
             #print line
-            m = re.search("\('(.+)', '(.+)', '.+', '.+', '.+', '(.+)', '[DIN]'\),*", line)
+            m = re.search("\('(.+)', '(.+)', '.+', '.+', '(.+)', '(.+)', '[DIN]'\),*", line)
             #print m
             if m:
+                tf_name_cisbp.setdefault(m.group(2), set()).add(m.group(3).upper())
                 if options.cisbp_family:
                   families.setdefault(m.group(1).upper(), set()).add(m.group(2).upper())
-                  print("Add TF on TF-CISBP ",m.group(1).upper(),m.group(2).upper())
+                  #print("Add TF on TF-CISBP ",m.group(1).upper(),m.group(2).upper())
                 else:
                   families.setdefault(m.group(1).upper(), set()).update(cisbp_families[m.group(2).upper()])          
-                  print("Add TF on TF-CISBP ",m.group(1).upper(),m.group(2).upper(),cisbp_families[m.group(2).upper()])
+                  #print("Add TF on TF-CISBP ",m.group(1).upper(),m.group(2).upper(),cisbp_families[m.group(2).upper()])
             else:
+               m = re.search(r"\('([^']*)','([^']*)','[^']*','[^']*','([^']*)','([^']*)','([DIN])'\),",line)
+               if m:
+                 tf_name_cisbp.setdefault(m.group(2), set()).add(m.group(3).upper())
+                 if options.cisbp_family:
+                  families.setdefault(m.group(1).upper(), set()).add(m.group(2).upper())
+                  #print("Add TF on TF-CISBP ",m.group(1).upper(),m.group(2).upper())
+                 else:
+                  families.setdefault(m.group(1).upper(), set()).update(cisbp_families[m.group(2).upper()])          
+                  #print("Add TF on TF-CISBP ",m.group(1).upper(),m.group(2).upper(),cisbp_families[m.group(2).upper()])
+               else:
                 print("SKIP TF on TF-CISBP second check",line)
         functions.write(tfs_dict_file, "#pdb;chain;family")
         # For FASTA sequence... #
@@ -327,23 +448,25 @@ if __name__ == "__main__":
             u_seq=None
             c_seq=None
             for uniacc in pdb[(pdb_name, pdb_chain)]:
-                print("Check UniAcc",uniacc)
                 if uniacc not in uniprot: 
                    print("Not found in UNIPROT",uniacc)
                    continue
                 md5, specie = uniprot[uniacc]
                 specie_list=specie.split()
-                print("Species",uniprot[uniacc], specie_list)
-                u_seq=(uniprot_full[(md5,specie)])
-                c_seq=None
-                for cisbp_md5, cisbp_specie in cisbp.keys():
-                    cisbp_specie_list=cisbp_specie.split()
-                    if (cisbp_md5,cisbp_specie) not in cisbp_full:
-                        print("CISBP data not found",cisbp_md5,cisbp_specie)
-                        continue
-                    c_seq=(cisbp_full[(cisbp_md5,cisbp_specie)])
-                    if md5 == cisbp_md5 or u_seq[0] in c_seq[0] or c_seq[0] in u_seq[0]:
-                        print("Found md5",md5,cisbp_md5,u_seq[1],c_seq[1])
+                if (md5,specie) not in uniprot_full:
+                   print("Not found in UNIPROT-FULL",uniacc,md5,specie)
+                   continue
+                u_seq_set=(uniprot_full[(md5,specie)])
+                print("Check UniAcc",uniacc,md5,specie,u_seq_set)
+                for cisbp_md5, cisbp_specie in cisbp_full.keys():
+                  cisbp_specie_list=cisbp_specie.split()
+                  c_seq_set=(cisbp_full[(cisbp_md5,cisbp_specie)])
+                  for c_seq in c_seq_set:
+                   try:
+                    for u_seq in u_seq_set:
+                     try:
+                      if md5 == cisbp_md5 or u_seq[0] in c_seq[0] or c_seq[0] in u_seq[0]:
+                        print("Found md5",md5,cisbp_md5,u_seq[1],c_seq[1],u_seq[2],c_seq[2])
                         if md5!=cisbp_md5: 
                            print("Different MD5 but matching sequences", u_seq[0],c_seq[0])
                            print("  -- check specie matching sequences", cisbp_specie,specie)
@@ -362,9 +485,16 @@ if __name__ == "__main__":
                                   pdb_family_set.update(set(family_id.split(",")))
                             pdb_family=",".join([str(x) for x in pdb_family_set])
                             tfs_cisbp.add((pdb_name, pdb_chain,pdb_family))
+                     except Exception as e:
+                       print("Failed to check MD5 and sequences in UniProt data ",e)  
+                       continue
+                   except Exception as e:
+                     print("Failed to check MD5 and sequences in CisBP data ",e)  
+                     continue
         for  pdb_name, pdb_chain,pdb_family in tfs_cisbp:
              functions.write(tfs_dict_file, "%s;%s;%s" % (pdb_name, pdb_chain,pdb_family))
     else:
+       print("Reading file ",tfs_dict_file)
        fo=open(tfs_dict_file,"r")
        for line in fo:
          if not line.startswith("#"):
@@ -395,4 +525,6 @@ if __name__ == "__main__":
       print("Total number of re-dials %d\n"%n)
       for pdb_name, pdb_chain, pdb_family in tfs_large:
         functions.write(tfs_large_dict_file, "%s;%s;%s" % (pdb_name, pdb_chain, pdb_family))
+    else:
+       print("Reading file ",tfs_dict_file)
       

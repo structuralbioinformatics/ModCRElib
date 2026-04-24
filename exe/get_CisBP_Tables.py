@@ -1,10 +1,16 @@
+"""
+Generate normalized CIS-BP SQL tables from mixed SQL/TSV sources.
+"""
+
 import os, sys, re
-import numpy
 import optparse
 from Bio import motifs as mm
 #from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 import configparser
+import pandas as pd
+import numpy as np
+from functools import reduce
 
 # Get scripts path (i.e. ".") #
 exe_path = os.path.abspath(os.path.dirname(__file__))
@@ -34,411 +40,220 @@ from ModCRElib.beans import functions
 from SBILib.data import aminoacids1to3, aminoacids_polarity_boolean, nitrogenous_bases
 from SBILib.structure import PDB
 
-#cisbp_sql="Cisbp_2.00.sql"
-#tf_info="TF_Information_all_motifs.txt"
-#protein="prot_seq.txt"
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for CIS-BP table reconstruction.
 
+    How to run:
+        ``python get_CisBP_Tables.py --sql_motif motifs.sql --tf tf_info.tsv --ps proteins.tsv``
+
+    Returns:
+        optparse.Values: Namespace with SQL/TSV input files and output root.
     """
 
-    parser = optparse.OptionParser("python --sql cisbp_sql_file  --tf tf_info_file --ps proteins_file [ -o rootname -v --select TF_selection_file]")
+    parser = optparse.OptionParser("python --sql_motif sql_motif_file  --tf tf_info_file --ps proteins_file [ -o rootname -v --sql_tf sql_tf_file ]")
 
-    parser.add_option("--sql", action="store", default=None, type="string", dest="sql_file", help="SQL file (from CIS-BP)", metavar="{file}")
+    parser.add_option("--sql_motif", action="store", default=None, type="string", dest="sql_motif_file", help="SQL motifs file (from CIS-BP)", metavar="{file}")
+    parser.add_option("--sql_tf", action="store", default=None, type="string", dest="sql_tf_file", help="SQL TF file (from CIS-BP)", metavar="{file}")
     parser.add_option("--tf", action="store", default=None, type="string", dest="tfs_file", help="TF info of all (from CIS-BP)", metavar="{file}")
     parser.add_option("--ps", action="store", default=None, type="string", dest="prot_file", help="Protein sequences (from CIS-BP)", metavar="{file}")
-    parser.add_option("--select", action="store", default=None, type="string", dest="tf_select", help="TF info of selected TFs (from CIS-BP)", metavar="{file}")
     parser.add_option("-o", action="store", type="string",default="CisBP",dest="root", help="CisBP file in SQL format with table of motifs (default CisBP)", metavar="{rootname}")
     parser.add_option("-v", "--verbose", default=False, action="store_true", dest="verbose", help="Verbose mode (default = False)")
 
     (options, args) = parser.parse_args()
 
-    if options.prot_file is None or options.tfs_file is None  or options.sql_file is None:
+    if options.prot_file is None or options.tfs_file is None  or options.sql_motif_file is None:
          parser.error("missing arguments: type option \"-h\" for help")
 
     return options
 
-def read_SQL_Tables(sql_file):
-    sql=open(sql_file,"r")
-    table_name=None
-    db_table={}
-    start_table=False
-    close_table=False
-    for line in sql:
-        data=line.strip().split()
-        block=line.strip().split(",")
-        if len(data)<1: continue
-        if len(block)<1: continue
-        if data[0]=="INSERT" and data[1]=="INTO":
-          table_name=None
-          start_table=True
-          for w in range(len(data)):
-              if data[w].startswith("(") and table_name is None: 
-                 table_name=data[w-1].rstrip("`").lstrip("`")
-          keys=[]
-          value_data=block[0].split()
-          value=value_data[-1].lstrip("(`").rstrip("`")
-          keys.append(value)
-          for word in block[1:-1]:
-            value_data=word.split()
-            value=value_data[-1].rstrip("`").lstrip("`")
-            keys.append(value)
-          value_data=block[-1].split()
-          value=value_data[0].lstrip("`").rstrip("`)")
-          keys.append(value)
-          #print "TABLE",table_name, "KEYS", keys
-          continue
-        if start_table:
-          table=[]
-          values=[]
-          for word in block:
-            value_data=word.split()
-            if len(value_data)<1: continue
-            value=value_data[-1]
-            if value.startswith("("): value=value.lstrip("(")
-            if value.endswith(";"):
-               close_table=True 
-               value=value.rstrip(";")
-            if value.endswith(")"): value=value.rstrip(")")
-            values.append(value.rstrip("'").lstrip("'"))
-          #print "TABLE",table_name, "VALUES",values, "LEN",len( values ),"KEYS",keys,"LEN",len(keys)
-          if len( values ) == len(keys) :
-            for i in range( len(keys) ):
-               table.append((keys[i],values[i]))
-            db_table.setdefault(table_name,set()).add(tuple(table))
-        if close_table:
-           start_table=False
-           close_table=False
-           #db_table.setdefault(table_name,table)
-    
-    return   db_table
+def parse_sql_inserts(filename, table_name, columns):
+    """
+    Parse SQL INSERT statements for one table into a DataFrame.
 
-def write_tf_table(rootname,table_name,table_keys,tf_info,prot_info,db_table):
+    Args:
+        filename (str): SQL file path.
+        table_name (str): SQL table name to extract.
+        columns (list[str]): Output DataFrame columns.
 
-    outfile=open(os.path.abspath(rootname+"."+table_name+".sql"),"w")
-    main_key=table_keys[0]
-    dbid={}
-    for tableSQL,set_of_tuples in db_table.items():
-      if tableSQL!="motifs":continue
-      for pairedlist in set_of_tuples:
-        dict_tuple=dict(pairedlist)
-        tf=None
-        dom=None
-        if main_key in dict_tuple: tf=dict_tuple.get(main_key)
-        if "DBID" in dict_tuple: dom=dict_tuple.get("DBID")
-        if tf is not None and dom is not None: dbid.setdefault(tf,dom)
-    
-    merged_table={}
-    for tf_id,set_of_tuples in tf_info.items():
-      if tf_id not in dbid: continue
-      for pairedlist in set_of_tuples:  
-        merged_tuples=set(list(pairedlist))
-        merged_tuples.add(("DBID",dbid[tf_id]))
-        main_value=("TF_ID",tf_id)
-        dictionary=dict(list(merged_tuples))
-        data={}
-        for key,value in dictionary.items():
-            if key in table_keys:
-               data.setdefault(key,value)
-        merged_table.setdefault(main_value,[]).append(data)
- 
-    clean_table={}
-    for key,list_of_data in merged_table.items():
-        for data in list_of_data:
-            clean_table.setdefault(key,set()).add(tuple([(k,v) for k,v in data.items()]))
-    #print clean_table
-    outfile.write("CREATE TABLE IF NOT EXISTS `%s` (\n"%table_name)
-    first=True
-    for key in table_keys:
-      if first:
-        outfile.write("\t`%s` varchar(20) NOT NULL,\n"%key)
-        first=False
-      else: 
-        outfile.write("\t`%s` varchar(20) DEFAULT NULL,\n"%key)
-    
-    outfile.write("\tPRIMARY KEY (`%s`)\n"%table_keys[0])
-    outfile.write(") ENGINE=MyISAM DEFAULT CHARSET=latin1;\n")
-    outfile.write("INSERT INTO `%s` ("%table_name)
-    for key in table_keys[0:-1]:
-        outfile.write("`%s`, "% key)
-    outfile.write("`%s`) VALUES\n"% table_keys[-1])
-    for key,set_of_data in clean_table.items():
-      for data in set_of_data:
-        skip=False
-        dictionary=dict(data)
-        for key_table in table_keys:
-            if key_table not in dictionary: skip=True
-        if skip: continue
-        outfile.write("(")
-        for key_table in table_keys[0:-1]:
-            outfile.write("'%s', "%dictionary.get(key_table))
-        outfile.write("'%s'),\n"%dictionary.get(table_keys[-1]))
-    outfile.write(";\n")
-    outfile.close()    
-
-       
-        
-
-def write_table(rootname,table_name,table_keys,tf_info,prot_info,db_table):
-
-    outfile=open(os.path.abspath(rootname+"."+table_name+".sql"),"w")
-    
-    main_key=table_keys[0]
-    partial={}
-    for tableSQL,set_of_tuples in db_table.items():
-        second_key = None
-        list_of_tuples=list(set_of_tuples)
-        if main_key not in iter(dict(list_of_tuples[0]).keys()):
-          for check_key in table_keys:
-            if check_key in iter(dict(list_of_tuples[0]).keys()) and second_key is None:
-             second_key=check_key
-        else:
-          second_key=main_key
-        if second_key is None: continue
-        #print tableSQL
-        for pairedlist in set_of_tuples:
-            #print pairedlist
-            data=[]
-            key_value=None
-            for key,value in pairedlist:
-                if key in table_keys:
-                   data.append((key,value))
-                   if key==second_key: key_value=value
-            if key_value is not None: 
-               #print "Found in", tableSQL
-               #print "Key",second_key,key_value
-               #print "Add",tuple(data)
-               partial.setdefault((second_key,key_value),set()).add(tuple(data))
-    #print tf_info
-    for tf_id,set_of_tuples in tf_info.items():
-        second_key = None
-        list_of_tuples=list(set_of_tuples)
-        if main_key  not in iter(dict(list_of_tuples[0]).keys()):
-          for check_key in table_keys:
-            if check_key in iter(dict(list_of_tuples[0]).keys()) and second_key is None:
-             second_key=check_key
-        else:
-          second_key=main_key
-        if second_key is None: continue
-        for pairedlist in set_of_tuples:
-            data=[]
-            for key,value in pairedlist:
-                if key in table_keys:
-                   data.append((key,value))
-                   if key==second_key: key_value=value
-            if key_value is not None: 
-               #print "Found in", tf_id
-               #print "Key",second_key,key_value
-               #print "Add",tuple(data)
-               partial.setdefault((second_key,key_value),set()).add(tuple(data))
-    #print prot_info
-    for p_id,set_of_tuples in prot_info.items():
-        second_key = None
-        list_of_tuples=list(set_of_tuples)
-        if main_key  not in iter(dict(list_of_tuples[0]).keys()):
-          for check_key in table_keys:
-            if check_key in iter(dict(list_of_tuples[0]).keys()) and second_key is None:
-             second_key=check_key
-        else:
-          second_key=main_key
-        if second_key is None: continue
-        for pairedlist in set_of_tuples:
-            data=[]
-            for key,value in pairedlist:
-                #print "CHECK PROTEIN",p_id,key,value
-                if key in table_keys:
-                   data.append((key,value))
-                   if key==second_key: key_value=value
-            #print "      DATA",p_id,second_key,key_value,data
-            if key_value is not None: 
-               #print "Found in", p_id
-               #print "Key",second_key,key_value
-               #print "Add",tuple(data)
-               partial.setdefault((second_key,key_value),set()).add(tuple(data))
-    merged_table={}
-    for double in range(2):
-      for key_pair,set_of_tuples in partial.items():
-        #print "CHECK ROUND",double,key_pair
-        if double==1: print("CHECK MAIN", table_name, main_key,key_pair)
-        #print set_of_tuples
-        main_value_set=set()
-        for  k,v in merged_table.items():
-             if key_pair==k: main_value_set.add(k)
-             for d in v:
-                 add_values=set([(kk,vv) for kk,vv in d.items()])
-                 if key_pair in add_values: main_value_set.add(k)
-        if len(main_value_set)>0 and double==1:print("Main value",len(main_value_set),"CHECK MAIN", table_name, main_key,key_pair)
-        link=False
-        for pairedlist in set_of_tuples:
-            dictionary=dict(pairedlist)
-            keys_in=set([x for x in dictionary.keys()])
-            main_value_pass=set()
-            if main_key in iter(dictionary.keys()):
-               main_value=(main_key,dictionary.get(main_key))
-               main_value_pass.add(main_value)
-               link=True
-            if not link:
-             for main_value_link in main_value_set:
-               #print "CHECK KEYS IN",keys_in,"MAIN VALUE",table_name,main_value_link
-               if main_value_link in merged_table:
-                  listdata=merged_table.get(main_value_link)
-                  keys_done=set()
-                  for i in range(len(listdata)):
-                      keys_done.update(set([x for x in listdata[i].keys()]))
-                  if  len(keys_done.intersection(keys_in))>0: 
-                      main_value_pass.add(main_value_link)
-                      link=True  
-            if not link: continue
-            #print "PASSES MAIN",main_key,key_pair,main_value, "PASSES",len(main_value_pass)
-            for main_value in main_value_pass:
-              #print "PASSES MAIN",main_key,key_pair,main_value
-              data={}
-              key_data=set()
-              for key,value in dictionary.items():
-                   if key in table_keys:
-                      data.setdefault(key,value)
-                      key_data.add(key)
-              if main_value in merged_table:
-                listdata=merged_table.get(main_value)
-                if len(listdata)>0:
-                 for i in range(len(listdata)):
-                   dictionary_done=listdata[i]
-                   #print " Old",table_name,i,main_value,merged_table[main_value][i]
-                   keys_done=set([x for x in dictionary_done.keys()])
-                   merge=True
-                   for key in key_data.intersection(keys_done):
-                       if data.get(key)=="." and dictionary_done.get(key) != ".": data[key]=dictionary_done.get(key)
-                       if dictionary_done.get(key)=="." and data.get(key) != ".": dictionary_done[key]= data.get(key)
-                       if dictionary_done.get(key) != data.get(key):
-                          merge=False
-                          if  dictionary_done.get(key) in data.get(key) or  data.get(key) in dictionary_done.get(key): merge=True
-                   if merge:
-                      #print "Merge",table_name,main_value,data,dictionary_done
-                      for key,value in dictionary_done.items():
-                        merged_table[main_value][i].setdefault(key,value)
-                      for key,value in data.items():
-                        merged_table[main_value][i].setdefault(key,value)
-                      #print "Modify ",table_name,i,main_value,merged_table[main_value][i]
-              else:    
-                #print "Add", table_name, main_value,    data
-                merged_table.setdefault(main_value,[]).append(data)
-    #Clean merged list
-    #print    merged_table
-    clean_table={}
-    for key,list_of_data in merged_table.items():
-        for data in list_of_data:
-            clean_table.setdefault(key,set()).add(tuple([(k,v) for k,v in data.items()]))
-    #print clean_table
-    outfile.write("CREATE TABLE IF NOT EXISTS `%s` (\n"%table_name)
-    first=True
-    for key in table_keys:
-      if first:
-        outfile.write("\t`%s` varchar(20) NOT NULL,\n"%key)
-        first=False
-      else: 
-        outfile.write("\t`%s` varchar(20) DEFAULT NULL,\n"%key)
-    
-    outfile.write("\tPRIMARY KEY (`%s`)\n"%table_keys[0])
-    outfile.write(") ENGINE=MyISAM DEFAULT CHARSET=latin1;\n")
-    outfile.write("INSERT INTO `%s` ("%table_name)
-    for key in table_keys[0:-1]:
-        outfile.write("`%s`, "% key)
-    outfile.write("`%s`) VALUES\n"% table_keys[-1])
-    for key,set_of_data in clean_table.items():
-      for data in set_of_data:
-        skip=False
-        dictionary=dict(data)
-        for key_table in table_keys:
-            if key_table not in dictionary: skip=True
-        if skip: continue
-        outfile.write("(")
-        for key_table in table_keys[0:-1]:
-            outfile.write("'%s', "%dictionary.get(key_table))
-        outfile.write("'%s'),\n"%dictionary.get(table_keys[-1]))
-    outfile.write(";\n")
-    outfile.close()    
+    Returns:
+        pandas.DataFrame: Parsed table rows.
+    """
+    with open(filename, 'r', encoding='utf-8') as f:
+        content = f.read()
+    # Find all INSERT statements for this table
+    pattern = rf"INSERT INTO\s+`{table_name}`.*?VALUES\s*(.*?);"
+    matches = re.findall(pattern, content, flags=re.S)
+    all_rows = []
+    for match in matches:
+        # Split rows by '),(' and clean parentheses
+        rows = re.findall(r"\((.*?)\)", match, flags=re.S)
+        for row in rows:
+            # Split values by commas not inside quotes
+            parts = re.findall(r"(?:'[^']*'|[^,]+)", row)
+            cleaned = [x.strip().strip("'") if x.strip() != "NULL" else None for x in parts]
+            all_rows.append(cleaned)
+    # Create DataFrame
+    return pd.DataFrame(all_rows, columns=columns)
 
 
+def pandas_to_sql(df, table_name, output_file, varchar_len=5000):
+    """
+    Write a SQL file to create and populate a table from a DataFrame.
+
+    Args:
+        df (pandas.DataFrame): Data to export.
+        table_name (str): SQL table name to create.
+        output_file (str): Output SQL file path.
+        varchar_len (int): Default varchar length for text-like columns.
+
+    Returns:
+        None.
+    """
+    with open(output_file, "w", encoding="utf-8") as f:
+        # --- CREATE TABLE statement
+        f.write(f"CREATE TABLE `{table_name}` (\n")
+        for col, dtype in zip(df.columns, df.dtypes):
+            # Map pandas dtypes to SQL types
+            if pd.api.types.is_integer_dtype(dtype):
+                sql_type = "INT"
+            elif pd.api.types.is_float_dtype(dtype):
+                sql_type = "FLOAT"
+            elif pd.api.types.is_bool_dtype(dtype):
+                sql_type = "BOOLEAN"
+            else:
+                sql_type = f"VARCHAR({varchar_len})"
+            f.write(f"  `{col}` {sql_type},\n")
+        f.seek(f.tell() - 2)  # remove last comma
+        f.write("\n);\n\n")
+        # --- INSERT statements
+        for _, row in df.iterrows():
+            values = []
+            for val in row:
+                if pd.isna(val):
+                    values.append("NULL")
+                else:
+                    # escape single quotes
+                    sval = str(val).replace("'", "''")
+                    values.append(f"'{sval}'")
+            values_str = ", ".join(values)
+            f.write(f"INSERT INTO `{table_name}` VALUES ({values_str});\n")
+
+
+def merge_keep_same_join_diff(dfs, on, sep=", "):
+    """
+    Merge multiple DataFrames while preserving agreements and joining conflicts.
+
+    Args:
+        dfs (list[pandas.DataFrame]): Input DataFrames sharing the merge keys.
+        on (list[str] | str): Merge key column(s).
+        sep (str): Separator used when joining distinct values.
+
+    Returns:
+        pandas.DataFrame: Merged table with harmonized non-key columns.
+    """
+    if isinstance(on, str):
+        on = [on]
+    # 1) Rename non-key columns in each df to make them unique per source:
+    renamed_dfs = []
+    all_base_cols = set()
+    for i, df in enumerate(dfs, start=1):
+        df = df.copy()
+        src_tag = f"__src{i}"
+        rename_map = {}
+        for col in df.columns:
+            if col not in on:
+                rename_map[col] = f"{col}{src_tag}"
+                all_base_cols.add(col)
+        df = df.rename(columns=rename_map)
+        renamed_dfs.append(df)
+    # 2) Outer-merge all renamed dfs on the key columns
+    merged = reduce(lambda a, b: pd.merge(a, b, on=on, how="outer"), renamed_dfs)
+    # 3) For each base column, find all source-specific columns and collapse them
+    result = merged[on].copy()  # start with keys
+    for base_col in sorted(all_base_cols):
+        # collect the source-specific column names that correspond to this base_col
+        src_cols = [c for c in merged.columns if c.startswith(base_col + "__src")]
+        if not src_cols:
+            # no occurrences of this column in any source -> create as NaN
+            result[base_col] = np.nan
+            continue
+        def collapse_row(values):
+            # values is a list-like of values from the source-specific columns for a single row
+            cleaned = []
+            for v in values:
+                if pd.isna(v):
+                    continue
+                # normalize to str and strip whitespace
+                s = str(v).strip()
+                if s == "":
+                    continue
+                cleaned.append(s)
+            # preserve insertion order but remove exact duplicates
+            uniq = []
+            for x in cleaned:
+                if x not in uniq:
+                    uniq.append(x)
+            if not uniq:
+                return np.nan
+            if len(uniq) == 1:
+                return uniq[0]
+            return sep.join(uniq)
+        # apply per-row collapse across these src_cols
+        result[base_col] = merged[src_cols].apply(lambda row: collapse_row(row.tolist()), axis=1)
+    # Reorder columns: keys first (in same order), then base_cols
+    final_cols = list(on) + [c for c in result.columns if c not in on]
+    return result[final_cols]
 
 #-------------#
 # Main        #
 #-------------#
 
 def main():
-    #Parameters required for ModCRE
+    """
+    Build normalized CIS-BP SQL tables from motif/TF/protein sources.
+
+    Workflow:
+        1. Define required ModCRE schemas.
+        2. Parse CLI options and load source tables.
+        3. Merge/aggregate records by TF identifier.
+        4. Export one SQL file per target table.
+
+    Returns:
+        None.
+    """
+    # Step 1) Define target table schemas required by ModCRE.
     cisbp_tables={}
-    cisbp_tf_table={}
+    cisbp_3_tables={}
     cisbp_tables.setdefault("tf_families",["Family_ID", "Family_Name", "DBDs", "DBD_Count", "Cutoff"])
     cisbp_tables.setdefault("motifs",["Motif_ID", "TF_ID", "MSource_ID", "DBID", "Motif_Type", "Motif_Sequence", "IUPAC", "IUPAC_REV"])
     cisbp_tables.setdefault("motif_sources",["MSource_ID", "MSource_Identifier", "MSource_Type", "MSource_Author", "MSource_Year", "PMID", "MSource_Version"])
-    cisbp_tf_table.setdefault("tfs",["TF_ID", "Family_ID", "TSource_ID", "DBID", "TF_Name", "TF_Species", "TF_Status"])
+    cisbp_tables.setdefault("tfs",["TF_ID", "Family_ID", "TSource_ID", "DBID", "TF_Name", "TF_Species", "TF_Status"])
     cisbp_tables.setdefault("proteins",["Protein_ID", "TF_ID", "DBID", "TF_Species", "Protein_Sequence"])
+    cisbp_3_tables.setdefault("proteins",["Protein_ID", "TF_ID", "DBID", "Protein_Type", "Protein_Sequence"])
 
-    # Arguments & Options #
+    # Step 2) Parse options and read input SQL/TSV sources.
     options = parse_options()
-    db_table= read_SQL_Tables(os.path.abspath(options.sql_file))
-    #Read Selection
-    use_selection=False
-    if options.tf_select is not None:
-       use_selection=True
-       select=set()
-       titles=[]
-       for line in functions.parse_file(os.path.abspath(options.tf_select)):
-        tf_dict=[]
-        if len(titles)<=0:
-           titles=line.strip().split()
-        else:
-           values=line.strip().split()
-           tf_id=values[0]
-           select.add(tf_id)
-    #Read TF_info
-    titles=[]
-    tf_info={}
-    for line in functions.parse_file(os.path.abspath(options.tfs_file)):
-        tf_dict=[]
-        if len(titles)<=0:
-           titles=line.strip().split("\t")
-        else:
-           values=line.strip().split("\t")
-           tf_id=values[0]
-           skip=False
-           if  use_selection:
-               if tf_id in  select: 
-                  skip=False
-               else: 
-                  skip=True
-           if skip:continue
-           if len(titles) == len(values):
-              for i in range(len(titles)):
-                  tf_dict.append((titles[i],values[i]))
-              tf_info.setdefault(tf_id,set()).add(tuple(tf_dict))
-    #Read protein_sequences
-    titles=[]
-    #print "PROTEIN"
-    prot_info={}
-    #print "Open ",options.prot_file
-    for line in functions.parse_file(os.path.abspath(options.prot_file)):
-        prot_dict=[]
-        if len(titles)<=0:
-           titles=line.strip().split("\t")
-           #print titles
-        else:
-           values=line.strip().split("\t")
-           p_id=values[0]
-           if len(titles) == len(values):
-              for i in range(len(titles)):
-                  prot_dict.append((titles[i],values[i]))
-              prot_info.setdefault(p_id,set()).add(tuple(prot_dict))
-              #print p_id,prot_dict
-    #print prot_info
-    #Create tables
+    #read tables
+    motif_table= parse_sql_inserts(os.path.abspath(options.sql_motif_file),"motifs",cisbp_tables["motifs"])
+    tf_info    = pd.read_csv(options.tfs_file,sep="\t",dtype="str")
+    prot_info  = pd.read_csv(options.prot_file,sep="\t",dtype="str")
+    if options.sql_tf_file is not None: 
+       tf_table   = parse_sql_inserts(os.path.abspath(options.sql_tf_file),"tfs",cisbp_tables["tfs"])
+    # Step 3) Merge all sources on TF_ID and restrict to selected TFs.
+    if options.sql_tf_file is not None: 
+       merged_all=merge_keep_same_join_diff([prot_info,tf_info,motif_table,tf_table],on="TF_ID")
+    else:
+       merged_all=merge_keep_same_join_diff([prot_info,tf_info,motif_table],on="TF_ID")
+    #select the TF_IDs
+    selected_ids = prot_info["TF_ID"].values
+    filtered = merged_all[merged_all["TF_ID"].isin(selected_ids)]
+    # Step 4) Export one SQL file per normalized target table.
     for table_name,table_keys in cisbp_tables.items():
-        write_table(options.root,table_name,table_keys,tf_info,prot_info,db_table)
-    for table_name,table_keys in cisbp_tf_table.items():
-        write_tf_table(options.root,table_name,table_keys,tf_info,prot_info,db_table)
+        result   = (filtered.groupby(table_keys[0])[table_keys[1:]].agg(lambda x: ", ".join(sorted(set(x.dropna().astype(str))))).reset_index())
+        output_file=options.root+"."+table_name+".sql"
+        pandas_to_sql(result, table_name, output_file)
 
 
 if __name__ == "__main__":

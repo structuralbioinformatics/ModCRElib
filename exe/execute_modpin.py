@@ -45,7 +45,33 @@ python = os.path.join(config.get("Paths", "python_path"), "python")
       
      
 def parse_user_arguments(*args, **kwds):
-    parser = argparse.ArgumentParser("execute_modpin -i PPI_LIST -o OUTPUT_DIR -seq SEQUENCES")
+    """
+    Parse command-line options for batch MODPIN / ModPPI modeling.
+
+    How to run:
+        python execute_modpin.py -i PPI_LIST -seq SEQUENCES.fa -o OUTPUT_DIR
+            [--dummy DUMMY_DIR] [-v] [-j] [--complete RATIO]
+
+    Example:
+        python execute_modpin.py -i pairs.txt -seq all.fa -o ModPPI_out
+            --dummy /tmp/modppi_dummy -v -j
+
+    The parser configures:
+        Input PPI list, FASTA sequence super-set, output root, optional cluster
+        submission (``-j``), completeness ratio for long server runs, and MODPIN
+        flags (hydrogens, renumber, 3DiD, optimize).
+
+    Args:
+        *args: Unused (compatibility).
+        **kwds: Unused (compatibility).
+
+    Returns:
+        argparse.Namespace: Parsed options (also exposed as ``options`` in ``main``).
+    """
+    parser = argparse.ArgumentParser(
+        "Usage: execute_modpin.py -i PPI_LIST -seq SEQUENCES.fa [-o OUTPUT_DIR] "
+        "[--dummy DUMMY_DIR] [-v] [-j] [--complete RATIO]"
+    )
     parser.add_argument('-i', '--query_list', dest = 'query_list', action = 'store',
                         help = 'Input file with a list of pairs of proteins to group and test')
     parser.add_argument('-l', '--label_name', dest = 'label', action = 'store', default = None,
@@ -86,7 +112,23 @@ def parse_user_arguments(*args, **kwds):
 # Main        #
 #-------------#
 
-if __name__ == "__main__":
+def main():
+    """
+    Run iterative MODPIN jobs for each PPI pair until completion or time budget.
+
+    Workflow:
+        1. Parse CLI options and ensure dummy/output paths exist.
+        2. Read PPI pairs from the query list and build or reuse an execution log.
+        3. Loop: submit or run MODPIN per pair (local or cluster), refresh the log
+           from ``interactions_done.list``, and stop when enough pairs finish or
+           wall-time / completeness criteria are met.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
 
     # Arguments & Options #
     options   = parse_user_arguments()
@@ -226,6 +268,6 @@ if __name__ == "__main__":
     if verbose:sys.stdout.write("Done\n")
 
 
-
-
+if __name__ == "__main__":
+    main()
 

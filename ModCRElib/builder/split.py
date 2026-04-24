@@ -1,3 +1,11 @@
+"""
+Split cleaned PDB structures into per-chain protein and per-helix DNA files.
+
+This builder helper is used by database-construction workflows to produce
+normalized chain-level inputs (PDB + FASTA) consumed by downstream contact,
+triad, and PWM stages.
+"""
+
 import os, sys, re
 import configparser
 import optparse
@@ -42,9 +50,13 @@ from ModCRElib.structure.dna import x3dna
 
 def parse_options():
     """
-    This function parses the command line arguments and returns an optparse
-    object.
+    Parse CLI options for chain/helix splitting.
 
+    How to run:
+        ``python split.py -i input.pdb [--dummy /tmp -o output_dir]``
+
+    Returns:
+        optparse.Values: Namespace with ``input_file``, ``dummy_dir``, ``output_dir``.
     """
 
     parser = optparse.OptionParser("python split.py -i input_file [--dummy=dummy_dir -o output_dir]")
@@ -62,15 +74,21 @@ def parse_options():
 
 def split_pdb_to_chains(pdb_obj, dssp_obj, x3dna_obj, output_dir="./", dummy_dir="/tmp"):
     """
-    This function splits a {PDB} into chains. Note that DNA chains will be
-    grouped according to continuous helix and not by individual chains.
+    Split one structure into protein-chain files and DNA-helix files.
 
-    @input:
-    pdb_obj {PDB}
-    dssp_obj {DSSP}
-    x3dna_obj {X3DNA}
-    dummy_dir {string}
+    Protein chains are filtered to retain only residues with DSSP annotations and
+    a minimum contiguous amino-acid span. DNA output is grouped by 3DNA helices
+    (not by original chain identifiers).
 
+    Args:
+        pdb_obj (PDB): Input structure object.
+        dssp_obj: DSSP annotations for the same structure.
+        x3dna_obj: X3DNA object with helix/basepair mapping.
+        output_dir (str): Destination folder for split outputs.
+        dummy_dir (str): Reserved for compatibility.
+
+    Returns:
+        None.
     """
 
     # Initialize #
@@ -150,17 +168,14 @@ def split_pdb_to_chains(pdb_obj, dssp_obj, x3dna_obj, output_dir="./", dummy_dir
 
 if __name__ == "__main__":
 
-    # Arguments & Options #
+    # Step 1) Parse command-line options.
     options = parse_options()
 
-    # Get PDB object #
+    # Step 2) Load structure and derived annotations (DSSP + X3DNA).
     pdb_obj = PDB(os.path.abspath(options.input_file))
-
-    # Get DSSP object #
     dssp_obj = dssp.get_dssp_obj(os.path.abspath(options.input_file), os.path.abspath(options.dummy_dir))
-
-    # Get X3DNA object #
     x3dna_obj = x3dna.get_x3dna_obj(os.path.abspath(options.input_file), os.path.abspath(options.dummy_dir))
     sys.stdout.write("Number of DNA helices: %d \n"%len(x3dna_obj.get_dna_helices()))
-    # PDB split to chains #
+
+    # Step 3) Export split protein-chain and DNA-helix files.
     split_pdb_to_chains(pdb_obj, dssp_obj, x3dna_obj, os.path.abspath(options.output_dir), os.path.abspath(options.dummy_dir))

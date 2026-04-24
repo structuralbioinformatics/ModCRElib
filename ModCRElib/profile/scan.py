@@ -1,3 +1,11 @@
+"""
+Scan a DNA sequence against a PWM database and rank orthologous TF templates.
+
+This script runs FIMO/TOMTOM-based motif scanning, groups compatible hits into
+clusters, threads orthologous TFs on structural templates, scores the resulting
+models, and writes several ortholog/template summary files.
+"""
+
 import os, sys, re
 import configparser
 import json
@@ -6,7 +14,6 @@ import optparse
 import shutil
 import subprocess
 from time import time
-import pickle
 import pickle
 
 # Get scripts path (i.e. ".") #
@@ -55,34 +62,60 @@ python = os.path.join(config.get("Paths", "python_path"), "python")
 #-------------#
 
 def fileExist(file):
-    '''
-    Check existing files
-    '''
+    """
+    Check whether a path exists and is a regular file.
+
+    Args:
+        file (str | None): Path to test.
+
+    Returns:
+        bool: True only when ``file`` exists and is a regular file.
+    """
     if file is not None:
         return os.path.exists(file) and os.path.isfile(file)
     else:
         return False
 
 def make_subdirs(main, subdirs):
-    '''
-    This function makes all subdirs listed in "subdirs".
-    '''
+    """
+    Create a collection of subdirectories inside a base directory.
+
+    Args:
+        main (str): Base directory.
+        subdirs (list[str]): Relative subdirectory names to create.
+    """
 
     for subdir in subdirs:
         if not os.path.exists(os.path.join(main, subdir)):
             os.makedirs(os.path.join(main, subdir))
 
 def remove_files(files):
-    '''
-    This function removes all files listed in "files".
-    '''
+    """
+    Remove the files listed in ``files`` when they exist.
+
+    Args:
+        files (list[str]): Paths to delete if present.
+    """
 
     for each_file in files:
         if os.path.exists(each_file):
             os.remove(each_file)
 
 
-def parse_best_orthologs(input_file,rank):
+def parse_best_orthologs(input_file, rank, pdb_root=None):
+    """
+    Parse the ortholog summary text file into a structured list.
+
+    Args:
+        input_file (str): Ortholog-summary file produced later in this script.
+        rank (bool): Whether orthologs were ranked by energy; if False, keep all.
+        pdb_root (str | None): Optional PDB directory overriding the global
+            ``pdb_dir`` used by the script.
+
+    Returns:
+        list[dict]: One dictionary per scanned fragment with metadata, selected
+        monomers/dimers, protein identifiers, associated families, and chains.
+    """
 
     orthologs_list = []
 
@@ -90,7 +123,11 @@ def parse_best_orthologs(input_file,rank):
     max_orthologs = int(config.get("Parameters","max_orthologs"))
     #store families per pdb_chain
     families={}
-    for line in functions.parse_file(os.path.join(pdb_dir, "families.txt")):
+    if pdb_root is None:
+        pdb_root = globals().get("pdb_dir")
+    if pdb_root is None:
+        raise ValueError("pdb_root is required when parse_best_orthologs is used outside the scan script")
+    for line in functions.parse_file(os.path.join(pdb_root, "families.txt")):
             if line.startswith("#"): continue
             pdb_chain, family = line.split(";")
             families[pdb_chain] = family
@@ -198,9 +235,32 @@ def parse_best_orthologs(input_file,rank):
 #-------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse the command line options for DNA-sequence scanning.
+
+    How to run:
+        python scan.py [--dummy DUMMY_DIR] -i INPUT_FASTA
+            [--pbm PBM_DIR --pdb PDB_DIR -o OUTPUT_DIR -l LABEL]
+            [-s SPECIE --complexes --reuse --rank -v]
+            [statistical potential options]
+
+    Example:
+        python scan.py -i dna.fa --pbm pbm_data --pdb pdb_data
+            -o scan_out -s 9606 -v
+
+    The parser configures:
+        - Input DNA FASTA and PBM/PDB resources.
+        - Output naming, logging, and scan-family/species filters.
+        - Runtime controls (complex clustering, reuse, ranking, index offset).
+        - Statistical-potential controls used by downstream scoring.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options describing the DNA input, PWM/PDB
+        databases, scanning thresholds, output paths, and scoring settings.
+    """
 
     parser = optparse.OptionParser("scan.py [--dummy=DUMMY_DIR] -i INPUT_FILE [-l LABEL -o OUTPUT_DIR] --pbm=PBM_dir --pdb=PDB_DIR -s SPECIE [-v]")
 
@@ -381,9 +441,14 @@ else:
     if not homologs_dir.startswith("/"):       homologs_dir     = os.path.abspath(homologs_dir)
     fold2pwm={}
     for pwm_file in os.listdir(os.path.join(pbm_dir, "pwms")):
-            if not pwm_file.endswith(".meme"): continue
-            if not pwm_file.endswith(".meme.s"): continue
-            hit = pwm_file.rstrip(".meme").rstrip(".meme.s")
+            if not (pwm_file.endswith(".meme") or pwm_file.endswith(".meme.s")):
+                continue
+            if pwm_file.endswith(".meme.s"):
+                hit = pwm_file[:-7]
+            elif pwm_file.endswith(".meme"):
+                hit = pwm_file[:-5]
+            else:
+                hit = os.path.splitext(pwm_file)[0]
             # Get chain PDB obj #
             m = re.search("(\S+)_(\d+)(\S+)",hit)
             if m:
@@ -454,8 +519,8 @@ if scan_family is not None:
 
 #Show total number of found  
 if verbose: sys.stdout.write("\t--Total number of hits: %d\n"%(len(fimo_obj.get_hits())))
-members_storage=os.path.join(options.output_dir,"members.pickle")
-cluster_storage=os.path.join(options.output_dir,"clusters.pickle")
+members_storage=os.path.join(output_dir,"members.pickle")
+cluster_storage=os.path.join(output_dir,"clusters.pickle")
 if not fileExist(members_storage) or not fileExist(cluster_storage):
  # For each hit... #
  for hit in fimo_obj.get_hits(sort=True):
@@ -676,8 +741,8 @@ homologs = {}
 orthologs = []
 emboss_path = config.get("Paths", "emboss_path")
 # For each cluster... #
-homologs_storage=os.path.join(options.output_dir,"homologs.pickle")
-orthologs_storage=os.path.join(options.output_dir,"orthologs.pickle")
+homologs_storage=os.path.join(output_dir,"homologs.pickle")
+orthologs_storage=os.path.join(output_dir,"orthologs.pickle")
 if not fileExist(homologs_storage) or not fileExist(orthologs_storage):
  for cluster in clusters:
     # Initialize #
@@ -1170,7 +1235,7 @@ for i in range(len(clusters)):
     out.write("//\n")
 out.close()
 
-orthologs_with_best_templates_list = parse_best_orthologs(output_file,rank)
+orthologs_with_best_templates_list = parse_best_orthologs(output_file, rank, pdb_root=pdb_dir)
 # Create json file #
 out = open(orthologs_best_json, "wt")
 out.write(json.dumps(orthologs_with_best_templates_list, separators=(',', ':'), indent=2))
@@ -1640,4 +1705,3 @@ info.write("%s\tDONE\n"%(os.path.basename(input_file)))
 info.close()
 print("Done")
 exit(0)
-

@@ -1,3 +1,12 @@
+"""
+Compute protein-DNA interaction scores from structures or threading models.
+
+This module prepares the structural context required for scoring, evaluates
+several statistical potentials over protein-DNA triads, and exposes a
+container class for exporting, normalizing, serializing, and plotting the
+resulting energy profiles.
+"""
+
 import os, sys, re
 from collections import Counter
 import configparser
@@ -56,6 +65,18 @@ from ModCRElib.msa import  pwm_pbm as PWM
 
 
 def scale_energies(energies, split_potential, min_score, max_score):
+    """
+    Min-max scale one energy term according to its potential type.
+
+    Args:
+        energies (dict): Raw energies keyed by split-potential name.
+        split_potential (str): Potential to scale.
+        min_score (float): Lower bound used for scaling.
+        max_score (float): Upper bound used for scaling.
+
+    Returns:
+        float: Scaled value for the selected potential.
+    """
 
     norm_e = 0.0
 
@@ -80,6 +101,34 @@ def scale_energies(energies, split_potential, min_score, max_score):
 
 
 def parse_data_scoring(pdb_dir,pbm_dir,dummy_dir,fragment_restrict,binding_restrict,input_pdb_file,input_threading_file,threading,template,random,dna_background,radius, potential_file, split_potential, auto_mode, family_potentials, pbm_potentials, score_threshold, taylor_approach, pmf , bins, known, norm,  verbose, methylation=False):
+    """
+    Prepare structural data and compute the main score plus random controls.
+
+    Depending on the input mode, this function reads either a PDB structure or
+    one or more threading files, derives the triads required for scoring,
+    loads statistical potentials, calculates the observed score, and
+    optionally builds random-score controls from background DNA sequences.
+
+    Args:
+        pdb_dir (str): Directory with structural data and optional family file.
+        pbm_dir (str): Directory containing PBM-derived PWM data.
+        dummy_dir (str): Working directory for temporary intermediate files.
+        input_pdb_file (str): PDB file to score when ``threading`` is false.
+        input_threading_file (str): Threading input file when ``threading`` is
+            true.
+        threading (bool): Whether the input is a threading description.
+        random (int): Number of random control scores to generate.
+        split_potential (str): Requested statistical potential or ``"all"``.
+        verbose (bool): Whether to emit progress messages.
+        methylation (bool): Whether methylated nucleotides are preserved.
+
+    Returns:
+        tuple: ``(scr, random_scores)`` where ``scr`` is the main ``score``
+        object and ``random_scores`` is a list of control ``score`` objects.
+
+    Raises:
+        Exception: If structural parsing, potential loading, or scoring fails.
+    """
     # Initialize #
     families = {}
     dummy_dir=dummy_dir+"_"+str(os.getpid())
@@ -93,7 +142,6 @@ def parse_data_scoring(pdb_dir,pbm_dir,dummy_dir,fragment_restrict,binding_restr
         if line.startswith("#"): continue
         pdb_chain, family = line.split(";")
         families[pdb_chain] = family
-
     if threading:
      try:
       try:
@@ -122,6 +170,7 @@ def parse_data_scoring(pdb_dir,pbm_dir,dummy_dir,fragment_restrict,binding_restr
         thread_complex=True
       if thread_complex:
        fi=open(input_threading_file,"r")
+       if verbose: sys.stdout.write("\t-- Open %s..."%input_threading_file)
        threading_files = []
        for line in fi:
            threading_files.append(line.strip())
@@ -131,7 +180,10 @@ def parse_data_scoring(pdb_dir,pbm_dir,dummy_dir,fragment_restrict,binding_restr
        for threading_file in threading_files:
            # Get triads, pdb etc from threading file #
            if verbose: sys.stdout.write("\t-- Get triads from %s ...\n"%threading_file)
-           triads_obj_file, pdb_obj_file, x3dna_obj = threading_to_triads.threading_triads(threading_file=threading_file, pdb_dir= pdb_dir, template=template, verbose=verbose, dummy_dir=dummy_dir)
+           try:
+               triads_obj_file, pdb_obj_file, x3dna_obj = threading_to_triads.threading_triads(threading_file=threading_file, pdb_dir= pdb_dir, template=template, verbose=verbose, dummy_dir=dummy_dir)
+           except Exception as e:
+               print("Failed to read triads (%s)"%e)
            for chain_obj in pdb_obj_file.chains:
                if chain_obj.chaintype == "P": pdb_obj.add_chain(chain_obj)
            for triad_obj in triads_obj_file.get_triads():
@@ -346,11 +398,46 @@ def parse_data_scoring(pdb_dir,pbm_dir,dummy_dir,fragment_restrict,binding_restr
 
 class score(object):
     """
-    Class of energy scores and profiles of scores per nucleotide
+    Store interaction energies and derived score tracks for one complex.
+
+    The object keeps total energies, normalized energies, per-nucleotide and
+    per-amino-acid contributions, plus the binding-site mapping used to
+    summarize or visualize a scored protein-DNA complex.
+
+    Object features:
+        - Global raw energies per split-potential (`_energies`).
+        - Global normalized energies per split-potential (`_norm_energies`).
+        - Per-nucleotide energy contribution maps
+          (`_energies_per_nucleotide`).
+        - Per-amino-acid energy contribution maps
+          (`_energies_per_aminoacid`).
+        - Binding-site index to supporting triad assignments (`_binding_site`).
+        - Default split-potential selector used by getters (`_potential`);
+          this can be set to a specific potential, while `"all"` preserves all
+          tracks and defaults score retrieval to `"s3dc_dd"`.
     """
 
     def __init__(self,binding_site=None, energies=None, energies_per_nucleotide=None, energies_per_aminoacid=None, norm_energies=None, potential=None):
-        
+        """
+        Initialize a score container with optional precomputed tracks.
+
+        Args:
+            binding_site (dict, optional): Binding-site map keyed by nucleotide
+                or dinucleotide positions, with supporting triad assignments.
+            energies (dict, optional): Total raw energies per split-potential.
+            energies_per_nucleotide (dict, optional): Per-position energy
+                contributions per split-potential.
+            energies_per_aminoacid (dict, optional): Per-residue energy
+                contributions per split-potential.
+            norm_energies (dict, optional): Normalized total energies per
+                split-potential.
+            potential (str, optional): Default split-potential selector used by
+                score getters. If not provided, defaults to `"all"`.
+
+        Returns:
+            None.
+        """
+
         self._energies={}
         self._energies_per_nucleotide={}
         self._energies_per_aminoacid={}
@@ -373,24 +460,30 @@ class score(object):
            self._potential=potential
 
     def set_potential(self, potential=None):
+        """Set the default split-potential returned by score accessors."""
         if potential is None: 
            self._potential="all"
         else:
            self._potential=potential
 
     def set_binding_site(self,binding_site):
+        """Store the binding-site triads keyed by nucleotide or dinucleotide."""
         self._binding_site=binding_site
 
     def set_energies(self,energies):
+        """Store raw total energies for each split-potential."""
         self._energies=energies
 
     def set_norm_energies(self,energies):
+        """Store normalized total energies for each split-potential."""
         self._norm_energies=energies
 
     def set_energies_per_nucleotide(self,energies_per_nucleotide):
+        """Store per-nucleotide energy contributions."""
         self._energies_per_nucleotide=energies_per_nucleotide
 
     def set_energies_per_aminoacid(self,energies_per_aminoacid):
+        """Store per-amino-acid energy contributions."""
         self._energies_per_aminoacid=energies_per_aminoacid
 
     def get_energies(self):
@@ -403,6 +496,7 @@ class score(object):
         return self._energies_per_aminoacid
 
     def get_score_per_nucleotide(self, normal=False, potential=None):
+        """Return the selected per-nucleotide score track."""
         #Select a score_per_nucleotide, default is defined by class or "s3dc_dd" if "all"
         if potential is None: split_potential = self._potential
         else:                 split_potential = potential
@@ -420,6 +514,7 @@ class score(object):
         return score_per_nucleotide
 
     def get_score_per_aminoacid(self, normal=False, potential=None):
+        """Return the selected per-amino-acid score track."""
         #Select a score_per_nucleotide, default is defined by class or "s3dc_dd" if "all"
         if potential is None: split_potential = self._potential
         else:                 split_potential = potential
@@ -437,6 +532,7 @@ class score(object):
         return score_per_aminoacid
 
     def get_score(self, normal=False, potential=None):
+        """Return one total score for the selected split-potential."""
         #Select a single score, default is defined by class or "s3dc_dd" if "all"
         if potential is None: split_potential = self._potential
         else:                 split_potential = potential
@@ -458,6 +554,25 @@ class score(object):
         return self._potential
 
     def calculate_energies_and_binding(self, triads_obj, x3dna_obj, msa_objs, potentials, thresholds, radii, radius=0, fragment_restrict=None, binding_restrict=None, dummy_dir="/tmp",methylation=False):
+        """
+        Compute total and per-position energies from a set of triads.
+
+        Args:
+            triads_obj: Triads describing protein-DNA contacts.
+            x3dna_obj: X3DNA object with base-pair indexing information.
+            msa_objs (dict): MSA objects used for potential normalization.
+            potentials (dict): Statistical potentials keyed by chain.
+            thresholds: Thresholds associated with the loaded potentials.
+            radii: Distance metadata returned with the potentials.
+            radius (float): Maximum contact distance to include.
+            fragment_restrict (dict, optional): Protein residue restrictions.
+            binding_restrict (list, optional): DNA nucleotide restrictions.
+            dummy_dir (str): Temporary directory for helper calculations.
+            methylation (bool): Whether methylated bases are preserved.
+
+        Returns:
+            None. Results are stored on the current ``score`` instance.
+        """
         # Initialize #
         split_potential = self._potential
         E_3d = 0
@@ -696,6 +811,7 @@ class score(object):
 
 
     def to_pickle(self, output_file,  overwrite=False):
+        """Serialize the score object to a pickle-friendly dictionary file."""
         # Create output file #
         if os.path.exists(output_file) and overwrite:
             os.remove(output_file)
@@ -720,6 +836,7 @@ class score(object):
         out.close()
 
     def from_pickle(self, input_file):
+        """Populate the score object from a pickle file created by ``to_pickle``."""
         # Read input file #
         inp = open(input_file,"rb")
         x=pickle.load(inp)
@@ -738,6 +855,7 @@ class score(object):
         self.set_energies_per_aminoacid(energies_per_aminoacid)
 
     def write(self, output_file, protein_name=None, normal=False, overwrite=False):
+        """Write a human-readable text report with total and per-position scores."""
 
         # Create output file #
         if os.path.exists(output_file) and overwrite:
@@ -906,6 +1024,15 @@ class score(object):
 
 
     def get_zscore(self,random):
+        """
+        Convert this score into Z-scores relative to random control scores.
+
+        Args:
+            random (list): List of ``score`` objects generated from controls.
+
+        Returns:
+            score: New score object containing Z-scored totals and profiles.
+        """
     
         binding_site = self.get_binding_site()
         other = self.__class__(binding_site=binding_site)
@@ -1020,6 +1147,7 @@ class score(object):
         return other
             
     def get_protein_plot(self,output_name):
+        """Save per-amino-acid score plots for each split-potential."""
         split_potentials  = ["3d", "3dc", "local", "pair", "s3dc", "s3dc_dd", "s3dc_di"]
         energies_per_aminoacid = self.get_energies_per_aminoacid()
         #print("PLOT ",energies_per_aminoacid)
@@ -1088,6 +1216,7 @@ class score(object):
             plt.close()
 
     def get_DNA_plot(self,output_name):
+        """Save per-nucleotide score plots for each split-potential."""
         split_potentials  = ["3d", "3dc", "local", "pair", "s3dc", "s3dc_dd", "s3dc_di"]
         #Define the sign of energy for normalization
         sign={}
@@ -1139,9 +1268,36 @@ class score(object):
 #-------------#
 
 def parse_options():
-    '''
-    This function parses the command line arguments and returns an optparse object.
-    '''
+    """
+    Parse command-line options for standalone score calculation.
+
+    How to run:
+        python scorer.py [--dummy DUMMY_DIR] -i INPUT_FILE
+            [--pdb PDB_DIR --pbm PBM_DIR -o OUTPUT_ROOT]
+            [--threading --template TEMPLATE --random N --plot -v]
+            [statistical potential options]
+
+    Example:
+        python scorer.py -i input.pdb --pdb pdb_data --pbm pbm_data
+            -o SCORE --plot -v
+
+    The parser configures:
+        - Input structure/threading source and optional template override.
+        - PBM/PDB resources, output naming, random/background controls.
+        - Fragment/binding restrictions and runtime logging options.
+        - Statistical-potential controls used by energy and score computation.
+
+    Args:
+        None.
+
+    Returns:
+        optparse.Values: Parsed CLI options covering the input structure,
+        scoring setup, random controls, and output preferences.
+
+    Raises:
+        SystemExit: Triggered by ``OptionParser`` when arguments are missing or
+        invalid.
+    """
 
     parser = optparse.OptionParser("Usage: scorer.py [--dummy=DUMMY_DIR] -i INPUT_FILE [-l LABEL -o OUTPUT_DIR --pbm=PBM_dir] --pdb=PDB_DIR [-m -v --threading] [-a -f -p -s SPLIT_POTENTIAL -t THRESHOLD -k -b --taylor --file POTENTIAL --radius RADIUS]")
 
@@ -1199,7 +1355,22 @@ def parse_options():
 # Main        #
 #-------------#
 
-if __name__ == "__main__":
+def main():
+    """
+    Run the standalone scoring workflow for one structure or threading input.
+
+    Workflow:
+        1. Parse command-line options and resolve input/output/resource paths.
+        2. Load or compute scores (and optional random/background distributions).
+        3. Write score summaries, pickles, and optional plots to disk.
+        4. Persist execution status in the selected log destination.
+
+    Args:
+        None.
+
+    Returns:
+        None. Score outputs are written to the selected output paths.
+    """
 
     # Arguments & Options #
     options = parse_options()
@@ -1342,4 +1513,7 @@ if __name__ == "__main__":
 
     print("Done")
 
+
+if __name__ == "__main__":
+    main()
 

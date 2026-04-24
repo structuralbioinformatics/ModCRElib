@@ -1,3 +1,10 @@
+"""
+Shared utility functions used across ModCRE modules.
+
+Includes lightweight file/FASTA parsers, queue and remote-execution helpers,
+ortholog output parsing, and small workflow bookkeeping utilities.
+"""
+
 import os, sys, re
 import gzip
 import pwd
@@ -10,13 +17,17 @@ import time
 
 def parse_file(file_name, gz=False):
     """
-    This function parses any file and yields lines one by one.
-    
-    @input:
-    file_name {string}
-    @return:
-    line {string}
+    Stream a text file line-by-line without trailing newlines.
 
+    Args:
+        file_name (str): Input path.
+        gz (bool): If True, read as gzipped text.
+
+    Yields:
+        str: Next line with final ``\\n`` removed.
+
+    Raises:
+        ValueError: If ``file_name`` does not exist.
     """
     if os.path.exists(file_name):
         # Initialize #
@@ -33,14 +44,15 @@ def parse_file(file_name, gz=False):
 
 def parse_fasta_file(file_name, gz=False, clean=True):
     """
-    This function parses any FASTA file and yields sequences as a tuple
-    of the form (identifier, sequence).
+    Parse FASTA records as ``(identifier, sequence)`` tuples.
 
-    @input:
-    file_name {string}
-    @return:
-    line {tuple} header, sequence
+    Args:
+        file_name (str): FASTA file path.
+        gz (bool): If True, read as gzipped text.
+        clean (bool): Replace non-word chars/digits by ``X`` in sequences.
 
+    Yields:
+        tuple[str, str]: Header text without ``>`` and the uppercase sequence.
     """
     # Initialize #
     identifier = ""
@@ -65,9 +77,15 @@ def parse_fasta_file(file_name, gz=False, clean=True):
 
 
 def fileExist(file):
-    '''
-    Check existing files
-    '''
+    """
+    Check whether a path points to an existing regular file.
+
+    Args:
+        file (str | None): Candidate file path.
+
+    Returns:
+        bool: True if ``file`` is not ``None`` and exists as a regular file.
+    """
     if file is not None:
         return os.path.exists(file) and os.path.isfile(file)
     else:
@@ -80,14 +98,17 @@ def fileExist(file):
 
 def write(file_name=None, content=None):
     """
-    This function writes any {content} to a file or to stdout if no
-    file is provided. If the file already exists, it pushed the {content}
-    at the bottom of the file.
+    Append one line of text to file or stdout.
 
-    @input:
-    file_name {string}
-    content {string}
+    Args:
+        file_name (str | None): Output file path. If ``None``, prints to stdout.
+        content (str): Text payload written as ``content + "\\n"``.
 
+    Returns:
+        None.
+
+    Raises:
+        ValueError: If file append fails.
     """
     if file_name is not None:
         try:
@@ -104,14 +125,22 @@ def write(file_name=None, content=None):
 
 def submit_command_to_queue(command, queue=None, max_jobs_in_queue=None, queue_file=None, dummy_dir="/tmp", submit="qsub", qstat="qstat"):
     """
-    This function submits any {command} to a cluster {queue}.
+    Submit a shell command to a local cluster queue wrapper.
 
-    @input:
-    command {string}
-    queue {string} by default it submits to any queue
-    max_jobs_in_queue {int} limits the number of jobs in queue
-    queue_file is a file with information specific of the cluster for running a queue
+    Supports two modes: direct pipe to ``submit`` or generation of a temporary
+    queue script from ``queue_file`` with the command appended.
 
+    Args:
+        command (str): Command line to execute in the queued job.
+        queue (str | None): Queue/partition name; if ``None`` submit to default.
+        max_jobs_in_queue (int | None): Optional throttle based on ``qstat``.
+        queue_file (str | None): Optional template script prepended to submission.
+        dummy_dir (str): Directory used to write temporary ``submit_*.sh`` files.
+        submit (str): Submission executable (e.g. ``qsub``).
+        qstat (str): Queue-status executable used for throttling.
+
+    Returns:
+        None.
     """
     import hashlib
 
@@ -174,12 +203,18 @@ def submit_command_to_queue(command, queue=None, max_jobs_in_queue=None, queue_f
 
 def submit_command_to_server(command, config, dummy_dir="/tmp"):
     """
-    This function submits any {command} to a cluster {queue} on a host server.
+    Submit a command through SSH/SFTP to the configured remote cluster.
 
-    @input:
-    command {string}
-    configuration data config
-    dummy directory
+    Uses ``config`` sections ``Cluster`` and ``Paths`` to stage a generated
+    script and execute the remote submit command.
+
+    Args:
+        command (str): Command to run remotely.
+        config: ``configparser.ConfigParser`` with remote credentials/settings.
+        dummy_dir (str): Local/remote scratch base used for submission scripts.
+
+    Returns:
+        str: Remote job id when parsing succeeds, otherwise an ``Error ...`` string.
     """
     import hashlib
     import paramiko
@@ -289,7 +324,20 @@ def submit_command_to_server(command, config, dummy_dir="/tmp"):
 
 def execute_in_remote(command,parameters,config,output_dir,logfile,waiting=True):    
     """
-    NOTE the output_dir must exist and be the same address in local and remote host
+    Create a remote wrapper script, submit it, and optionally wait for completion.
+
+    Completion is detected by polling ``logfile`` for the command/job marker line.
+
+    Args:
+        command (str): Python script name (e.g. ``scanner.py``).
+        parameters (str): CLI arguments passed to the script.
+        config: ``ConfigParser`` with remote cluster settings.
+        output_dir (str): Existing job directory, shared between local/remote FS.
+        logfile (str): Log file path where DONE markers are appended.
+        waiting (bool): If True, poll until the command marker appears.
+
+    Returns:
+        str: Job identifier or error message from remote submission helpers.
     """
         
     remote_scripts_path = os.path.join(config.get("Cluster","server_directory"),"scripts")
@@ -372,12 +420,18 @@ def execute_in_remote(command,parameters,config,output_dir,logfile,waiting=True)
 
 def submit_command_to_server3(command, config, dummy_dir="/tmp"):
     """
-    This function submits any {command} to a cluster {queue} on a host server.
+    Python3-oriented variant of ``submit_command_to_server``.
 
-    @input:
-    command {string}
-    configuration data config
-    dummy directory
+    It reads ``command_queue3`` from configuration and submits through the same
+    SSH/SFTP flow as the Python2 variant.
+
+    Args:
+        command (str): Command to run remotely.
+        config: ``ConfigParser`` with remote credentials/settings.
+        dummy_dir (str): Local/remote scratch base used for submission scripts.
+
+    Returns:
+        str: Remote job id when parsing succeeds, otherwise an ``Error ...`` string.
     """
     import hashlib
     import paramiko
@@ -487,7 +541,18 @@ def submit_command_to_server3(command, config, dummy_dir="/tmp"):
 
 def execute_in_remote3(command,parameters,config,output_dir,logfile,waiting=True):    
     """
-    NOTE the output_dir must exist and be the same address in local and remote host
+    Python3-oriented variant of ``execute_in_remote``.
+
+    Args:
+        command (str): Python script name.
+        parameters (str): CLI arguments passed to the script.
+        config: ``ConfigParser`` with remote cluster settings.
+        output_dir (str): Existing job directory, shared between local/remote FS.
+        logfile (str): Log file path where DONE markers are appended.
+        waiting (bool): If True, poll until the command marker appears.
+
+    Returns:
+        str: Job identifier or error message from remote submission helpers.
     """
         
     remote_scripts_path = os.path.join(config.get("Cluster","server_directory"),"scripts")
@@ -572,9 +637,13 @@ def execute_in_remote3(command,parameters,config,output_dir,logfile,waiting=True
 
 def number_of_jobs_in_queue(qstat="qstat"):
     """
-    This functions returns the number of jobs in queue for a given
-    user.
+    Count queued jobs for the current Unix user.
 
+    Args:
+        qstat (str): Queue-status executable.
+
+    Returns:
+        int: Number of lines in ``qstat -u <user>`` containing the username.
     """
 
     # Initialize #
@@ -586,8 +655,10 @@ def number_of_jobs_in_queue(qstat="qstat"):
 
 def get_username():
     """
-    This functions returns the user name.
+    Return the current Unix account name.
 
+    Returns:
+        str: Username from ``pwd.getpwuid(os.getuid())``.
     """
 
     return pwd.getpwuid(os.getuid())[0]
@@ -600,6 +671,23 @@ def get_username():
 
 
 def parse_best_orthologs(input_file,pdb_dir,config,rank):
+    """
+    Parse scanner ortholog text output into ModCRE cluster dictionaries.
+
+    Each ``>`` block describes one DNA interval/hit. Monomer and dimer entries
+    are ranked by score and truncated according to ``max_orthologs`` unless
+    ``rank`` is False.
+
+    Args:
+        input_file (str): Ortholog text file (``orthologs_with_best_templates.txt``).
+        pdb_dir (str): PDB data directory containing ``families.txt``.
+        config: ``ConfigParser`` with ``Parameters/max_orthologs``.
+        rank (bool): If False, keep all ranked hits per interval.
+
+    Returns:
+        list[dict]: Interval dictionaries with proteins, families, monomer/dimer
+        threading tuples, and metadata used by web JSON serializers.
+    """
 
     orthologs_list = []
 
@@ -718,6 +806,15 @@ def parse_best_orthologs(input_file,pdb_dir,config,rank):
 
 
 def done_jobs(info_file):
+    """
+    Read finished job identifiers from an info/log file.
+
+    Args:
+        info_file (str): Path where first token per non-comment line is a job id.
+
+    Returns:
+        set[str]: Completed job ids.
+    """
     done=set()
     if not fileExist(info_file): return done
     info=open(info_file,"r")
@@ -728,6 +825,16 @@ def done_jobs(info_file):
     return done
 
 def check_done(done,set_of_jobs):
+    """
+    Check whether there are pending jobs not present in the done set.
+
+    Args:
+        done (iterable[str]): Completed job paths or names.
+        set_of_jobs (iterable[str]): Target job paths or names.
+
+    Returns:
+        bool: True if at least one target job is not done.
+    """
     if len(set_of_jobs)<=0:return False
     done_set=set()
     for data in done:
@@ -740,6 +847,16 @@ def check_done(done,set_of_jobs):
 
 
 def check_submitted(submitted,pdb_files):
+    """
+    Check whether there are PDB jobs still not present in submitted records.
+
+    Args:
+        submitted (iterable[str]): Submitted job paths or names.
+        pdb_files (iterable[str]): Expected PDB job paths or names.
+
+    Returns:
+        bool: True if at least one PDB file has not been submitted.
+    """
     submitted_set=set()
     for data in submitted:
         submitted_set.add(os.path.basename(data))
@@ -757,6 +874,15 @@ def check_submitted(submitted,pdb_files):
 
 
 def reverse_dna(seq):
+    """
+    Compute reverse complement for canonical DNA alphabet ``A,C,G,T``.
+
+    Args:
+        seq (str): Input DNA sequence.
+
+    Returns:
+        str: Reverse-complement sequence.
+    """
     reverse={"A":"T","T":"A","C":"G","G":"C"}
     rev=""
     for n in range(len(seq)-1,-1,-1):
