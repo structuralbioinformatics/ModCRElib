@@ -1,0 +1,23 @@
+name: modcrelib_env
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - blast=2.17.0
+  - cd-hit=4.8.1
+  - clustalo=1.2.4
+  - clustalw=2.1
+  - dssp=3.1.4
+  - emboss=6.6.0
+  - ghostscript=9.53.3
+  - hmmer=3.3.2
+  - meme=5.5.9
+  - pip=26.1.2
+  - python=3.10.20
+  - tmalign=20240303
+  - pip:
+      - biopython==1.79
+      - numpy==2.2.6
+      - pandas==2.3.3
+      - scipy==1.15.3
+      - weblogo==3.9.0

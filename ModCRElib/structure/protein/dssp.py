@@ -180,13 +180,13 @@ def get_dssp_obj(pdb_file, dummy_dir="/tmp"):
         # Exec process #
         dssp_out="dssp_"+str(os.getpid())+".out"
         #print("Execute ",os.path.join(dssp_path, "dssp"), pdb_file, os.path.join(dummy_dir,dssp_out))
-        process = subprocess.check_output([os.path.join(dssp_path, "dssp"), pdb_file, os.path.join(dummy_dir,dssp_out)], stderr=subprocess.STDOUT)
+        process = subprocess.check_output([os.path.join(dssp_path, "mkdssp"), pdb_file, os.path.join(dummy_dir,dssp_out)], stderr=subprocess.STDOUT)
         # Get DSSP object #
         dssp_obj = DSSP(os.path.join(dummy_dir,dssp_out))
         # Remove DSSP file #
         os.remove(os.path.join(dummy_dir,dssp_out))
     except:
-        print("Failed ",os.path.join(dssp_path, "dssp"),pdb_file,os.path.join(dummy_dir,dssp_out))
+        print("Failed ",os.path.join(dssp_path, "mkdssp"),pdb_file,os.path.join(dummy_dir,dssp_out))
         raise ValueError("Could not exec DSSP for %s" % pdb_file)
 
     return dssp_obj

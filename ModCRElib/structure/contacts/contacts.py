@@ -545,7 +545,24 @@ def get_contacts_obj(pdb_obj, x3dna_obj=None, contacts_type="pdi", distance_type
                                     for basepair in x3dna_obj.get_dinucleotide(dinucleotide):
                                         for chain, residue_num in x3dna_obj.get_basepair(basepair):
                                             try:
-                                              check_nucleotide_p_or_bb=pdb_obj.get_chain_by_id(chain).get_residue_by_identifier(str(residue_num))
+                                              #print(chain)
+                                              #print(pdb_obj.chain_identifiers)
+                                              try:
+                                                  chain_obj = pdb_obj.get_chain_by_id(chain)
+                                              except:
+                                                  print(f"{chain} is not found in {pdb_obj.chain_identifiers}")    
+                                              try:
+                                                  check_nucleotide_p_or_bb = chain_obj.get_residue_by_identifier(str(residue_num))
+                                              except:
+                                                  for i in chain_obj._all_residues:
+                                                      print(i.number)
+                                                  resnumb=str(residue_num)
+                                                  print(f"{resnumb} is not found in {chain}")
+                                              if check_nucleotide_p_or_bb is None:
+                                                  print(f"Residue {residue_num} not found")
+                                                  raise KeyError(f"Residue {residue_num} not found")
+
+                                              #check_nucleotide_p_or_bb=pdb_obj.get_chain_by_id(chain).get_residue_by_identifier(str(residue_num))
                                             except Exception as e:
                                               print("Check Warning ",e)
                                               print("\tdinucleotide: %s basepair: %s chain: %s residue_num: %s"%(dinucleotide,basepair,chain,str(residue_num)))

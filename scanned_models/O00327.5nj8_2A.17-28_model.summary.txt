@@ -1,3 +1,0 @@
-#model;n;template;N-tails;C-tails;protein-chain;DNA-chain;#identities;#coverage;template_by_RMSD;domain;%_identity;%_similarity
-1;1;5nj8;0;126;A;E,F;38;60;NA;;38;38
-2;2;5nj8;0;126;A;E,F;38;60;NA;;38;38

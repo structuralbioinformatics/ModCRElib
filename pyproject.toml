@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modcrelib"
+version = "1.0.0"
+description = "ModCRE library for transcription factor structural and functional analysis"
+readme = "README.md"
+requires-python = ">=3.9"
+
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+packages = [
+    "ModCRElib",
+    "SBILib",
+    "modpy"
+]
+
+[project.scripts]
+modcrelib = "ModCRElib.cli:main"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.package-data]
+ModCRElib = ["exe/*.py"]
+

@@ -1,0 +1,432 @@
+import os, sys, re
+import configparser
+import optparse
+import subprocess
+import shutil
+from Bio.PDB import PDBParser, PDBIO
+from Bio.PDB.Residue import Residue
+
+
+# Get scripts path (i.e. ".") #
+exe_path = os.path.abspath(os.path.dirname(__file__))
+if os.path.exists(os.path.join(exe_path,"..","ModCRElib")):
+   scripts_path = os.path.join(exe_path,"..")
+elif os.path.exists(os.path.join(exe_path,"..","..","ModCRElib")):
+   scripts_path = os.path.join(exe_path,"..","..")
+elif os.path.exists(os.path.join(exe_path,"..","..","..","ModCRElib")):
+   scripts_path = os.path.join(exe_path,"..","..","..")
+else:
+   scripts_path = os.path.join(exe_path)
+
+config_path  = os.path.join(scripts_path,"ModCRElib","configure")
+
+
+# Append scripts path to python path #
+sys.path.append(scripts_path)
+
+# Read configuration file #
+config = configparser.ConfigParser()
+config_file = os.path.join(config_path, "config.ini")
+config.read(config_file)
+
+# Imports my functions #
+from ModCRElib.beans import functions
+
+
+# Imports jbonet's module #
+from SBILib.data import dna_complementary
+from SBILib.structure import PDB
+from SBILib.structure.chain import ChainOfNucleotide
+from SBILib.structure.residue import ResidueOfNucleotide
+
+# Import my modules #
+from ModCRElib.structure.contacts import interface
+from ModCRElib.structure.dna import x3dna
+
+#-------------#
+# Functions   #
+#-------------#
+
+def parse_options():
+    """
+    Parse command-line options for protein-DNA complex DNA remodeling.
+    """
+    parser = optparse.OptionParser("python model_dna.py  -p pdb_file ( -i interface_file -p pdb_file and (-s dna_sequence or (-t threading_file --pdb pdb_dir ) ) ][--dummy=dummy_dir -o output_dir]")
+
+    parser.add_option("--dummy", default="/tmp/", action="store", type="string", dest="dummy_dir", help="Dummy directory (default = /tmp/)", metavar="{directory}")
+    parser.add_option("-i", action="store", default=None, type="string", dest="interface_file", help="Interface file (from interface.py)", metavar="{filename}")
+    parser.add_option("-o", "--output-dir", default="./", action="store", type="string", dest="output_dir", help="Output directory (default = ./)", metavar="{directory}")
+    parser.add_option("-p", action="store", type="string", dest="pdb_file", help="PDB file (e.g. from model_protein.py)", metavar="{filename}")
+    parser.add_option("-s", action="store", type="string", dest="dna_sequence", help="DNA sequence ", metavar="{string}")
+    parser.add_option("-t", action="store", default=None, type="string", dest="threading_file", help="Threading file (e.g. from threader.py)", metavar="{string}")
+    parser.add_option("--pdb", action="store", default=None, type="string", dest="pdb_dir", help="PDB directory (i.e. output dir from pdb.py)", metavar="PDB_DIR")
+
+    (options, args) = parser.parse_args()
+
+    if (options.interface_file is None or options.pdb_file is None or (options.dna_sequence is None and (options.threading_file is None or options.pdb_dir is None)) ):
+        parser.error("missing arguments: type option \"-h\" for help")
+
+    return options
+
+def get_dna_model_pdb_obj(pdb_file, dna_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir="/tmp"):
+    """
+    Mutate interface DNA bases using a native implementation of the 
+    find_pair -> analyze -> parameter modification -> rebuild pipeline.
+    """
+    basepairs = set()
+    nucleobases = set()
+    model_pdb_file = os.path.join(dummy_dir, str(os.getpid()) + "mutated.pdb")
+    
+    # Text mutation tracking dictionary: { basepair_index: "A-T" }
+    target_mutations = {}
+
+    # Correct DNA sequence #
+    dna_sequence = re.sub("U", "T", dna_sequence)
+    dna_sequence = re.sub("Q", "T", dna_sequence)
+    dna_sequence = re.sub("J", "T", dna_sequence)
+    dna_sequence = re.sub("X", "C", dna_sequence)
+    dna_sequence = re.sub("O", "C", dna_sequence)
+    dna_sequence = re.sub("[^acgtACGT]", "N", dna_sequence)
+    
+    # Get nucleotides list #
+    nucleotides = list(dna_sequence)
+    
+    if interface_obj.get_interface_basepairs() is not None:
+        interface_range = interface_obj.get_interface_basepairs()
+    elif interface_range is None:
+        sys.stdout.write("[WARNING] No DNA interface to model. Original DNA preserved.\n")
+        return PDB(pdb_file)
+        
+    for basepair in interface_range:
+        if len(nucleotides) > 0:
+            nucleotide = nucleotides.pop(0).upper()
+            ((pdb_chain_A, residue_num_A), (pdb_chain_B, residue_num_B)) = x3dna_obj.get_basepair(basepair)
+            
+            if nucleotide != "N":
+                comp_nucleotide = dna_complementary[nucleotide]
+                target_mutations[int(basepair)] = "%s-%s" % (nucleotide, comp_nucleotide)
+                nucleobases.add((pdb_chain_A, residue_num_A))
+                nucleobases.add((pdb_chain_B, residue_num_B))
+                
+            basepairs.add(basepair)
+
+    if len(target_mutations) == 0:
+        shutil.copy(pdb_file, model_pdb_file)
+    else:
+        prefix = os.path.join(dummy_dir, "struct_mod_%d" % os.getpid())
+        working_pdb = prefix + ".pdb"
+        try:
+            src_path = config.get("Paths", "src_path")
+            x3dna_path = os.path.join(src_path, config.get("Paths", "x3dna_path"))
+            os.environ['X3DNA'] = os.path.abspath(os.path.join(x3dna_path, ".."))
+            
+            shutil.copy(pdb_file, working_pdb)
+            
+            find_pair_bin = os.path.join(x3dna_path, "find_pair")
+            analyze_bin = os.path.join(x3dna_path, "analyze")
+            rebuild_bin = os.path.join(x3dna_path, "rebuild")
+            
+            bps_file = prefix + ".bps"
+            
+            # Step 1: Run find_pair and analyze
+            sys.stdout.write("[DEBUG] Running find_pair...\n")
+            subprocess.check_call([find_pair_bin, working_pdb, bps_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, cwd=dummy_dir)
+            
+            sys.stdout.write("[DEBUG] Running analyze...\n")
+            subprocess.check_call([analyze_bin, bps_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, cwd=dummy_dir)
+            
+            generated_par = os.path.join(dummy_dir, "bp_step.par")
+            modified_par = prefix + ".par"
+            
+            if not os.path.exists(generated_par):
+                raise FileNotFoundError("3DNA analyze utility failed to output standard bp_step.par file matrix data.")
+            
+            # Step 2: Read parameters and update target rows
+            with open(generated_par, "r") as fh, open(modified_par, "w") as fo:
+                for _ in range(3):
+                    fo.write(fh.readline())
+                
+                bp_idx = 1
+                for line in fh:
+                    if line.strip() and not line.startswith("#"):
+                        if bp_idx in target_mutations:
+                            mutated_type = target_mutations[bp_idx]
+                            line = mutated_type + line[3:]
+                        bp_idx += 1
+                    fo.write(line)
+            
+            # Step 3: Run rebuild
+            sys.stdout.write("[DEBUG] Running rebuild on modified parameter track...\n")
+            subprocess.check_call([rebuild_bin, "-atomic", modified_par, model_pdb_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ, cwd=dummy_dir)
+            
+            # Clean up temporary configuration fragments
+            for ext in [".pdb", ".bps", ".par", ".out", "ref_frames.dat"]:
+                f_path = prefix + ext
+                if os.path.exists(f_path): os.remove(f_path)
+            if os.path.exists(generated_par): os.remove(generated_par)
+                
+        except Exception as e:
+            sys.stderr.write("\n========================================================\n")
+            sys.stderr.write("[CRITICAL ERROR] 3DNA execution failed or crashed!\n")
+            sys.stderr.write(f"Details: {str(e)}\n")
+            sys.stderr.write("========================================================\n")
+            raise ValueError("Structural architecture error parsing 3DNA v2.4 binaries.")
+
+    if not os.path.exists(model_pdb_file) or os.path.getsize(model_pdb_file) == 0:
+        raise FileNotFoundError(f"[ERROR] 3DNA rebuild generated an empty file: '{model_pdb_file}'")
+
+    # Get raw model PDB object #
+    ###############################################################################
+    # Clean rebuilt structure using Bio.PDB
+    ###############################################################################
+    
+    BACKBONE_ATOMS = {
+        "P", "OP1", "OP2",
+        "O5'", "C5'",
+        "C4'", "O4'",
+        "C3'", "O3'",
+        "C2'", "C1'"
+    }
+    
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("DNA_MODEL", model_pdb_file)
+    rebuilt_chain_ids = [chain.id for chain in structure[0]]
+    print("Rebuilt chains:", rebuilt_chain_ids)
+    original_chain_map = {}
+    for bp in sorted(basepairs):
+        ((chain1, res1), (chain2, res2)) = x3dna_obj.get_basepair(bp)
+    
+        original_chain_map[1] = chain1
+        original_chain_map[2] = chain2
+    
+        # One base pair is enough
+        break
+    
+    print(original_chain_map)
+
+
+
+    for model in structure:
+    
+        for chain in model:
+    
+            residues = list(chain)
+    
+            for residue in residues:
+    
+                # Ignore HETATM residues
+                if residue.id[0] != " ":
+                    continue
+    
+                resnum = residue.id[1]
+    
+                try:
+                    bp = x3dna_obj.get_residue_basepair(chain.id, int(resnum))
+                except Exception:
+                    continue
+    
+                if bp not in basepairs:
+                    continue
+    
+                # Keep rebuilt nucleotide completely
+                if (chain.id, int(resnum)) in nucleobases:
+                    continue
+    
+                ###################################################################
+                # Replace nucleotide by backbone-only residue
+                ###################################################################
+    
+                new_residue = Residue(
+                    residue.id,
+                    residue.resname,
+                    residue.segid
+                )
+    
+                for atom in residue:
+    
+                    if atom.get_name() in BACKBONE_ATOMS:
+                        new_residue.add(atom.copy())
+    
+                chain.detach_child(residue.id)
+                chain.add(new_residue)
+    
+    ###############################################################################
+    # Save cleaned structure
+    ###############################################################################
+    ###ADDED
+    for chain in structure[0]:
+        residues = list(chain.get_residues())
+        print(
+            chain.id,
+            residues[0].id[1],
+            residues[-1].id[1],
+            len(residues)
+        )
+
+
+    from Bio.PDB.Structure import Structure
+    from Bio.PDB.Model import Model
+    merged = parser.get_structure("merged", pdb_file)
+    dna_chain_ids = []
+
+    ((orig_chain1, orig_res1),
+     (orig_chain2, orig_res2)) = x3dna_obj.get_basepair(1)
+
+    for chain in structure[0]:
+        first_residue = next(chain.get_residues())
+        print(chain.id, first_residue.id[1])
+
+    for chain in merged[0]:
+    
+        residues = list(chain)
+    
+        if not residues:
+            continue
+    
+        names = {r.resname.strip() for r in residues if r.id[0] == " "}
+    
+        if names <= {"DA","DT","DG","DC","A","T","G","C","U"}:
+            dna_chain_ids.append(chain.id)
+    
+    for cid in dna_chain_ids:
+        merged[0].detach_child(cid)
+   
+    
+    ((chainA, _), (chainB, _)) = x3dna_obj.get_basepair(1)
+    desired_chain_ids = [chainA, chainB]
+    rebuilt_chains = list(structure[0])
+
+    # 1. Renumber residues to start at 1 for each chain
+    for chain in rebuilt_chains:
+        # We enumerate starting at 1 to get the new sequential index
+        for new_idx, residue in enumerate(list(chain.get_residues()), start=1):
+            # Unpack the original ID components
+            hetflag, old_idx, res_insert = residue.id
+            
+            # Assign the new ID tuple with the updated sequence number
+            residue.id = (hetflag, new_idx, res_insert)
+
+
+
+
+    # First assign temporary IDs
+    for i, chain in enumerate(rebuilt_chains):
+        chain.id = f"TMP{i}"
+    
+    # Final rename
+    for chain, cid in zip(rebuilt_chains, desired_chain_ids):
+        chain.id = cid
+
+    #for chain, cid in zip(structure[0], dna_chain_ids):
+    #    chain.id = cid
+
+    for chain in structure[0]:
+        residues = list(chain.get_residues())
+        if residues:
+            print(
+                f"Chain: {chain.id} | "
+                f"Starts at: {residues[0].id[1]} | "
+                f"Ends at: {residues[-1].id[1]} | "
+                f"Total count: {len(residues)}"
+            )
+
+
+    for chain in structure[0]:
+        merged[0].add(chain.copy())
+
+
+    ####ADDED
+
+    clean_pdb = os.path.join(
+        dummy_dir,
+        f"{os.getpid()}_cleaned.pdb"
+    )
+    
+    io = PDBIO()
+    #io.set_structure(structure)
+    io.set_structure(merged)
+    io.save(clean_pdb)
+    
+    ###############################################################################
+    # Reload with SBILib
+    ###############################################################################
+    
+    model_pdb_obj = PDB(clean_pdb)
+    
+    ###############################################################################
+    # Cleanup
+    ###############################################################################
+    
+    for f in (model_pdb_file, clean_pdb):
+        if os.path.exists(f):
+            os.remove(f)
+    
+    return model_pdb_obj
+
+
+def main():
+    options = parse_options()
+
+    if not os.path.exists(options.output_dir):
+        os.makedirs(options.output_dir)
+    if not os.path.exists(options.dummy_dir):
+        os.makedirs(options.dummy_dir)
+        
+    pdb_file = options.pdb_file
+    if not pdb_file.startswith("/"): pdb_file = os.path.abspath(pdb_file)
+    
+    pdb_dir = options.pdb_dir
+    if pdb_dir is not None and not pdb_dir.startswith("/"): 
+        pdb_dir = os.path.abspath(options.pdb_dir)
+        
+    if options.threading_file is not None:
+       threading_file = options.threading_file
+       if not threading_file.startswith("/"): threading_file = os.path.abspath(threading_file)
+       
+    if options.interface_file is not None:
+       interface_file = options.interface_file
+       if not interface_file.startswith("/"): interface_file = os.path.abspath(interface_file) 
+
+    dna = set()
+    kmers = {}
+    x3dna_obj = x3dna.get_x3dna_obj(pdb_file)
+
+    if options.threading_file is not None and options.pdb_dir is not None:
+        if os.path.exists(threading_file) and os.path.exists(pdb_dir):
+            import threader 
+            thread_obj = threader.Threaded(threading_file)
+            pdb_name = thread_obj.get_pdb_name()
+            pdb_chain = thread_obj.get_pdb_chain()
+            interface_file = os.path.join(pdb_dir, "interfaces", pdb_name + "_" + pdb_chain + ".txt")
+            kmers = thread_obj.get_kmers()
+            kmers_fixed = thread_obj.get_kmers_fixed()
+            for dna_sequence in kmers.keys():
+                if "N" not in dna_sequence: dna.add(dna_sequence)
+            for dna_sequence in kmers_fixed.keys():
+                dna.add(dna_sequence)
+        else:
+            sys.stderr.write("Threading file %s is not found\n" % (threading_file))
+            exit(0)
+    else:
+        kmers.setdefault(options.dna_sequence, 0)
+        dna.add(options.dna_sequence)
+        
+    if os.path.exists(interface_file):
+        interface_obj = interface.Interface(interface_file)
+    else:
+        sys.stderr.write("Interface file %s is not found\n" % (interface_file))
+        exit(0)
+
+    for dna_sequence in dna:
+        if len(dna_sequence) != interface_obj.get_interface_length():
+            raise ValueError("DNA sequence does not match the interface length.")
+
+        try:
+            pdb_obj = get_dna_model_pdb_obj(pdb_file, dna_sequence, x3dna_obj, interface_obj, interface_range=None, dummy_dir=options.dummy_dir)
+            pdb_obj.write(os.path.join(options.output_dir, "model." + dna_sequence + ".pdb"))
+        except Exception as run_err:
+            sys.stderr.write(f"\n[FATAL TERMINATION] Sequence {dna_sequence} failed processing: {str(run_err)}\n")
+            raise run_err
+
+if __name__ == "__main__":
+    main()
