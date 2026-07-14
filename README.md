@@ -26,6 +26,7 @@
    conda activate modcrelib_env
    # navigate into the downloaded repository (location of this file)
    ```
+   Note that for installs on Apple Silicon machines conda would need to use Intel Emulation to install several of the packages.
 3. Download external software:
 
    **Modeller**
