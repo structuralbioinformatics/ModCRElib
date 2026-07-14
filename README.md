@@ -43,9 +43,9 @@
    2. Download 3DNA v2.4.8-2023nov10 from http://forum.x3dna.org/index.php?topic=248.0
    3. Follow the install instructions: http://forum.x3dna.org/howtos/how-to-install-3dna-on-linux-and-windows/
 
-4. Install ModCRElib:
+4. Install ModCRElib (install as editable for overview of database installs):
    ```bash
-   pip install .
+   pip install -e .
    ```
 5. Configure ModCRElib (note: some dependencies are large — PBM ≈ 110 GB, PDB ≈ 88 GB):
    ```bash
@@ -874,5 +874,5 @@ The `ModCRElib/exe` folder contains other executable programs that, while not th
 | `mmcifs_to_pdbs.py` | Converts a folder of mmCIF files to PDB |
 | `model_IMP.py` | Uses IMP to model macro-complexes |
 | `nearest_neighbour.py` | Calculates the closest similar sequences (nearest neighbor) of each TF, compares their PWMs using TOMTOM, and compares modelled PWMs against the dataset of PWMs. Builds boxplots comparing success across different conditions and TOMTOM-derived scores |
-| `pbm.py` / `pdb.py` | Create the PBM and PDB directories, sourced from http://aleph.upf.edu/modcrefiles/ |
+| `pbm.py` / `pdb.py` | Create the PBM and PDB directories, sourced from https://sbi.upf.edu/modcre/views/images/pdb.tgz and https://sbi.upf.edu/modcre/views/images/pbm.tgz |
 | `pdb2thread.py` | Converts a PDB file to a thread file |
