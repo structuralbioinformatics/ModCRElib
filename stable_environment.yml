@@ -15,6 +15,7 @@ dependencies:
   - pip=26.1.2
   - python=3.10.20
   - tmalign=20240303
+  - mmseqs2=18.8cc5c
   - pip:
       - biopython==1.79
       - numpy==2.2.6

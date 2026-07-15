@@ -60,6 +60,41 @@
 
 ---
 
+##Installation on osx-arm64 platforms (Apple M1, M2, M3, M4, or later)
+
+You will need to emulate older x64 Intel architecture using Apple's Rosetta 2 
+
+1. Download the repository as before
+2. Setup the Conda environment using an intel emulator
+   ```bash 
+   CONDA_SUBDIR=osx-64 conda env create --file stable_environment.yml
+   ```
+3. Setup environment to always run on intel
+   ```bash
+   conda activate modcrelib_env
+   conda config --env --set subdir osx-64
+   ```
+4. Install Modeller through conda (make sure to still supply the licence code following modellers instructions)
+   ```bash
+   conda install salilab::modeller=10.8 
+   ```
+5. Run a custom modeller setup script to allow modcrelib to communicate to this modeller install
+   ```bash 
+   bash setup_modeller.sh 
+   ```
+6. Run modeller and x3dna export commands as outlined in regular install process
+7. Install ModCRElib (install as editable for overview of database installs):
+   ```bash
+   pip install -e .
+   ```
+8. Configure ModCRElib (note: some dependencies are large — PBM ≈ 110 GB, PDB ≈ 88 GB):
+   ```bash
+   modcrelib setup
+   ```
+
+---
+
+
 ## Additional dependency info
 
 ### Environment dependencies

@@ -108,6 +108,7 @@ def generate_dynamic_config():
         "weblogo_path": "weblogo",
         "cd-hit": "cd-hit",
         "ghostscript_path": "gs",
+        "mmseqs": "mmseqs",
     }
 
     for config_key, binary_name in binary_mappings.items():
@@ -193,8 +194,8 @@ def generate_dynamic_config():
 
     cluster_fields = [
         "cluster_name", "cluster_queue", "cluster_submit", "cluster_qstat",
-        "max_jobs_in_queue", "min_jobs_in_queue", "command_queue",
-        "server_host", "server_user", "server_passwd", "server_directory", "server_python"
+        "max_jobs_in_queue", "min_jobs_in_queue", "command_queue"#,
+        #"server_host", "server_user", "server_passwd", "server_directory", "server_python"
     ]
 
     for field in cluster_fields:
