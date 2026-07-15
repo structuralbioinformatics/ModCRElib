@@ -60,7 +60,7 @@
 
 ---
 
-##Installation on osx-arm64 platforms (Apple M1, M2, M3, M4, or later)
+## Installation on osx-arm64 platforms (Apple M1, M2, M3, M4, or later)
 
 You will need to emulate older x64 Intel architecture using Apple's Rosetta 2 
 
