@@ -174,11 +174,11 @@ def get_tmalign_obj(pdb_file_a, pdb_file_b, dummy_dir="/tmp"):
         src_path = config.get("Paths", "src_path")
         tmalign_path = os.path.join(src_path, config.get("Paths", "tmalign_path"))
         # If Mac OS X... #
-        if sys.platform == "darwin":
+        try sys.platform == "darwin":
             process = subprocess.check_output([os.path.join(tmalign_path, "TMalign"), pdb_file_a, pdb_file_b], stderr=subprocess.STDOUT)
         # Else... #
-        else:
-            process = subprocess.check_output([os.path.join(tmalign_path, "TMalign"), "-A", pdb_file_a, "-B", pdb_file_b], stderr=subprocess.STDOUT)
+        except:
+            process = subprocess.check_output([os.path.join(tmalign_path, "TMalign"), pdb_file_a, pdb_file_b], stderr=subprocess.STDOUT)
         # Get TMalign object #
         tmalign_obj = TMalign(process.decode().split("\n"))
     except:
