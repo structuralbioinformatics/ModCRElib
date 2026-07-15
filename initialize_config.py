@@ -157,6 +157,34 @@ def generate_dynamic_config():
         config["Paths"]["x3dna_path"] = ""
         print("✗ X3DNA path could not be automatically determined anywhere.")
 
+
+
+    # =========================================================
+    # 6b. Provied Base Alteration scripts
+    # =========================================================
+    mutate_bases_src = pkg_root / "ModCRElib" / "beans" / "mutate_bases"
+
+    if x3dna_detected_path:
+        x3dna_bin_dir = Path(x3dna_detected_path)
+        if mutate_bases_src.exists():
+            try:
+                x3dna_bin_dir.mkdir(parents=True, exist_ok=True)
+                dest_path = x3dna_bin_dir / mutate_bases_src.name
+                shutil.copy2(mutate_bases_src, dest_path)
+                # Preserve the source file's permissions (e.g. executable bit)
+                os.chmod(dest_path, os.stat(mutate_bases_src).st_mode)
+                print(f"✓ Placed Base Alteration functionality")
+            except (OSError, PermissionError) as e:
+                print(f"✗ Failed to place Base Alteration functionality")
+        else:
+            print(f"✗ Could not find source file to copy: {mutate_bases_src}")
+    else:
+        print("✗ Skipping Base Alteration — no X3DNA path was determined.")
+
+
+
+
+
     # =========================================================
     # ROBUST DYNAMIC MODELLER DETECTOR
     # =========================================================
