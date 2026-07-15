@@ -43,7 +43,8 @@ REQUIRED_EXECUTABLES = [
     "mkdssp",    # provided by dssp 
     "TMalign",   # provided by tmalign
     "matcher",   # provided by Modeller
-    "mmseqs",    # rovided by mmseq2
+    "mmseqs",    # provided by mmseq2
+    "weblogo",   # provided by weblogo
 ]
 
 REQUIRED_DIRECTORIES = [
