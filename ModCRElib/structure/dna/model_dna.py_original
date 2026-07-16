@@ -108,18 +108,16 @@ def get_dna_model_pdb_obj(pdb_file, dna_sequence, x3dna_obj, interface_obj, inte
             nucleobases.add((pdb_chain_B, residue_num_B))
         # Keep basepair #
         basepairs.add(basepair)
-    # Execute mutate_bases (pure-Python reimplementation; the old X3DNA
-    # binary 'mutate_bases' no longer works against current X3DNA/DSSR
-    # installs, see ModCRElib/beans/mutate_bases.py) #
+    # Execute 3DNA #
     try:
         # Initialize #
-        mutate_bases_script = os.path.join(scripts_path, "ModCRElib", "beans", "mutate_bases.py")
+        src_path = config.get("Paths", "src_path")
+        x3dna_path = os.path.join(src_path, config.get("Paths", "x3dna_path"))
+        os.environ['X3DNA'] = x3dna_path[:-4]
         # Exec process #
-        process = subprocess.check_output(
-            [sys.executable, mutate_bases_script, "-l", mutations_file, pdb_file, model_pdb_file],
-            stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as error:
-        raise ValueError("Could not exec mutate_bases.py for %s:\n%s" % (pdb_file, error.output.decode(errors="replace")))
+        process = subprocess.check_output([os.path.join(x3dna_path, "mutate_bases"), "-l", mutations_file, pdb_file, model_pdb_file], stderr=subprocess.STDOUT, env=os.environ)
+    except:
+        raise ValueError("Could not exec X3DNA for %s" % pdb_file)
     # Get raw model PDB object #
     model_pdb_obj = PDB(model_pdb_file)
     # For each PDB chain... #
@@ -219,3 +217,4 @@ if __name__ == "__main__":
 
       # Write model object #
       pdb_obj.write(os.path.join(options.output_dir, "model." + options.dna_sequence + ".pdb"))
+
