@@ -335,8 +335,8 @@ def get_x3dna_obj(pdb_file, dummy_dir="/tmp"):
     try:
         # Initialize #
         src_path = config.get("Paths", "src_path")
-        x3dna_path = os.path.join(src_path, config.get("Paths", "x3dna_path"))
-        #x3dna_path = config.get("Paths", "x3dna_path")
+        #x3dna_path = os.path.join(src_path, config.get("Paths", "x3dna_path"))
+        x3dna_path = config.get("Paths", "x3dna_path")
         os.environ['X3DNA'] = x3dna_path[:-4]
         # Get current working directory #
         cwd = os.getcwd()

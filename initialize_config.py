@@ -165,27 +165,131 @@ def generate_dynamic_config():
     # ROBUST DYNAMIC MODELLER DETECTOR
     # =========================================================
     modeller_bin_path = ""
+    root_path = None
+
+    # =========================================================
+    # 1. FIXED CUSTOM ENVIRONMENT VARIABLES (Resilient Check)
+    # =========================================================
     custom_env_root = os.environ.get("MODELLER_ROOT") or os.environ.get("MODELLER_HOME")
+    if custom_env_root:
+        # Expand tokens like '~' if used in shell exports
+        potential_root = Path(os.path.expanduser(custom_env_root)).resolve()
+        
+        if potential_root.exists():
+            # Check standard subdirectories AND the root directory itself case-insensitively
+            possible_bins = [
+                potential_root / "bin" / "modpy.sh",
+                potential_root / "Bin" / "modpy.sh",
+                potential_root / "modpy.sh"
+            ]
+            
+            for candidate_bin in possible_bins:
+                if candidate_bin.exists():
+                    root_path = potential_root
+                    modeller_bin_path = str(candidate_bin.parent)
+                    print(f"✓ Found Modeller via custom environment variable -> {root_path}")
+                    break
 
-    if custom_env_root and Path(custom_env_root).exists():
-        root_path = Path(custom_env_root).resolve()
-        candidate_bin = root_path / "bin" / "modpy.sh"
-        if candidate_bin.exists():
-            modeller_bin_path = str(Path(candidate_bin).parent)
-            config["Paths"]["modeller_path"] = modeller_bin_path
-            print(f"✓ Found Modeller via environment variable ($MODELLER_ROOT) -> {root_path}")
+    # =========================================================
+    # 2. CHECK CONDA ENVIRONMENT
+    # =========================================================
+    if not modeller_bin_path:
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+        if conda_prefix:
+            candidate_bin = Path(conda_prefix) / "bin" / "modpy.sh"
+            if candidate_bin.exists():
+                root_path = Path(conda_prefix).resolve()
+                modeller_bin_path = str(candidate_bin.parent)
+                print(f"✓ Found Modeller via active Conda environment -> {root_path}")
 
+    # Alternative Conda / Python path check
+    if not modeller_bin_path:
+        for path_str in sys.path:
+            candidate_lib = Path(path_str) / "modlib"
+            if candidate_lib.exists():
+                for parent in candidate_lib.parents:
+                    candidate_bin = parent / "bin" / "modpy.sh"
+                    if candidate_bin.exists():
+                        root_path = parent.resolve()
+                        modeller_bin_path = str(candidate_bin.parent)
+                        print(f"✓ Found Modeller via Python site-packages -> {root_path}")
+                        break
+            if modeller_bin_path:
+                break
+
+    # =========================================================
+    # 3. CHECK ACTIVE SYSTEM PATH
+    # =========================================================
     if not modeller_bin_path:
         modpy_executable = shutil.which("modpy.sh")
         if modpy_executable:
             resolved_bin = Path(modpy_executable).resolve()
-            root_path = resolved_bin.parent.parent
-            if (root_path / "modlib").exists():
-                modeller_bin_path = str(resolved_bin)
+            possible_root = resolved_bin.parent.parent
+            if (possible_root / "modlib").exists():
+                root_path = possible_root.resolve()
+                modeller_bin_path = str(resolved_bin.parent)
                 print(f"✓ Found Modeller via active system PATH -> {root_path}")
 
+    # =========================================================
+    # 4. SCAN STANDARD SYSTEM + USER INSTALLATION DIRECTORIES
+    # =========================================================
     if not modeller_bin_path:
-        print("✗ Modeller 10.3 custom installation could not be detected automatically.")
+        current_os = platform.system()
+        search_roots = []
+        home = Path.home()
+
+        if current_os == "Linux":
+            # Added common unprivileged user binary folders (~/bin, ~/.local/lib)
+            search_roots = [
+                home / "bin", 
+                home / ".local" / "lib", 
+                Path("/usr/lib"), 
+                Path("/usr/local/lib"), 
+                Path("/opt")
+            ]
+        elif current_os == "Darwin":  # macOS
+            search_roots = [home / "bin", Path("/opt/local/lib"), Path("/usr/local/lib"), Path("/usr/local")]
+        elif current_os == "Windows":
+            prog_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+            prog_files_x86 = os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")
+            search_roots = [Path(prog_files), Path(prog_files_x86)]
+
+        # Search for any folder starting with "Modeller" (case-insensitive)
+        for root in search_roots:
+            if not root.exists():
+                continue
+            try:
+                # Direct check: Is the root directory itself a "modeller" directory?
+                folders_to_check = [root] if "modeller" in root.name.lower() else list(root.iterdir())
+                
+                for item in folders_to_check:
+                    if item.is_dir() and "modeller" in item.name.lower():
+                        bin_file = "modpy.bat" if current_os == "Windows" else "modpy.sh"
+                        
+                        # Look inside standard structures inside this found directory
+                        possible_bins = [item / "bin" / bin_file, item / bin_file]
+                        for candidate_bin in possible_bins:
+                            if candidate_bin.exists():
+                                root_path = item.resolve()
+                                modeller_bin_path = str(candidate_bin.parent)
+                                print(f"✓ Found manual Modeller installation -> {root_path}")
+                                break
+                    if modeller_bin_path:
+                        break
+            except PermissionError:
+                continue 
+            
+            if modeller_bin_path:
+                break
+
+
+
+
+    if not modeller_bin_path:
+        print("✗ Modeller installation could not be detected automatically. Please run: export MODELLER_ROOT='path/to/install/modeller10.3'")
+       
+
+
 
     # =========================================================
     # 7. INTERACTIVE CLUSTER CONFIGURATION POPULATION

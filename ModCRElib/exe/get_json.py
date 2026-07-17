@@ -16,17 +16,17 @@ scripts_path = os.path.join(home,"scripts")
 config_path  = os.path.join(scripts_path,"ModCRElib","configure")
 sys.path.append(scripts_path)
 
-#databases_of_pwms={ 
-#                   "jaspar":os.path.join(home,"ExternalPWMs/jaspar_pwms"),
-#                   "cisbp":os.path.join(home,"ExternalPWMs/CisBP_pwms"),
-#                   "hocomoco":os.path.join(home,"ExternalPWMs/hocomoco_pwms")
-#                  }
-
-databases_of_pwms={
-                   "jaspar":os.path.join(home,"jaspar/jaspar_2024/PWMS"),
-                   "cisbp":os.path.join(home,"pbm/CisBP_2019/pwms"),
-                   "hocomoco":os.path.join(home,"hocomoco/pwms")
+databases_of_pwms={ 
+                   "jaspar":os.path.join(home,"ExternalPWMs/jaspar_pwms"),
+                   "cisbp":os.path.join(home,"ExternalPWMs/CisBP_pwms"),
+                   "hocomoco":os.path.join(home,"ExternalPWMs/hocomoco_pwms")
                   }
+
+#databases_of_pwms={
+#                   "jaspar":os.path.join(home,"jaspar/jaspar_2024/PWMS"),
+#                   "cisbp":os.path.join(home,"pbm/CisBP_2019/pwms"),
+#                   "hocomoco":os.path.join(home,"hocomoco/pwms")
+#                  }
 
 
 
@@ -79,9 +79,9 @@ acc_nn={}
 tf_fam = pd.read_csv(families)
 tf_nn  = pd.read_csv(neighbors)
 
-#for db_pwm in databases_of_pwms:
-#    for file in os.listdir(databases_of_pwms[db_pwm]):
-#        set_pwms[db_pwm].add(file)
+for db_pwm in databases_of_pwms:
+    for file in os.listdir(databases_of_pwms[db_pwm]):
+        set_pwms[db_pwm].add(file)
 
 for tf in tf_fam.values:
     acc_fam.setdefault(tf[0],set(tf[1].split(",")))
