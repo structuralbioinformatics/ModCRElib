@@ -287,8 +287,9 @@ def generate_dynamic_config():
 
 
     if not modeller_bin_path:
-        print("✗ Modeller installation could not be detected automatically. Please run: export MODELLER_ROOT='path/to/install/modeller10.3'")
-       
+        print("✗ Modeller installation could not be detected automatically. Please run: export MODELLER_ROOT='path/to/install/modeller10.3'")       
+    else:
+        config["Paths"]["modeller_path"]=modeller_bin_path
 
 
 
