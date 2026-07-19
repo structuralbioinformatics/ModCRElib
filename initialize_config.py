@@ -1,7 +1,8 @@
-import os
+import os,sys
 import shutil
 import configparser
 from pathlib import Path
+import platform
 
 def find_x3dna_bottom_up(start_path):
     """
