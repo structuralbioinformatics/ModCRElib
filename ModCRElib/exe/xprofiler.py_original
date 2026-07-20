@@ -353,12 +353,9 @@ def calculate_protein_profiles(info_file,threading,pdb_files,name_of_profiles,la
             output_file      = os.path.join(output_dir,output_pdb_name)
             if functions.fileExist(original_meme) and not functions.fileExist(output_file+".meme"):
                if verbose:print(("\t-- Found PWM %s and copy to %s"%(os.path.basename(original_meme),output_pdb_name+".meme")))
-            #Fix of issue found running on Shiva (Patrick)
-            #if functions.fileExist(original_meme) and not functions.fileExist(output_file+".meme"): shutil.copy(original_pwm,output_file+".meme")
-            if functions.fileExist(original_meme) and not functions.fileExist(output_file+".meme"): shutil.copy(original_meme,output_file+".meme")
+            if functions.fileExist(original_meme) and not functions.fileExist(output_file+".meme"): shutil.copy(original_pwm,output_file+".meme")
             if functions.fileExist(original_pwm)  and not functions.fileExist(output_file+".pwm") : shutil.copy(original_pwm,output_file+".pwm")
-            #if functions.fileExist(original_msa)  and not functions.fileExist(output_file+".msa") : shutil.copy(original_pwm,output_file+".msa")
-            if functions.fileExist(original_msa)  and not functions.fileExist(output_file+".msa") : shutil.copy(original_msa,output_file+".msa")
+            if functions.fileExist(original_msa)  and not functions.fileExist(output_file+".msa") : shutil.copy(original_pwm,output_file+".msa")
             if output_pdb_name in submitted: continue
             # Skip if compressed results already exist
             if functions.fileExist(output_file+".pickle"):

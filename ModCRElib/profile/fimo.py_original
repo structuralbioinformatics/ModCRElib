@@ -12,8 +12,6 @@ import copy
 import optparse
 import shutil
 import subprocess
-import tempfile
-
 
 # Get scripts path (i.e. ".") #
 exe_path = os.path.abspath(os.path.dirname(__file__))
@@ -333,27 +331,36 @@ def get_fimo_obj(database_file, fasta_file,fimo_pvalue_threshold=None, max_store
               output_fimo=output_fimo+str(n)
               n = n + 1
 
-        if not os.path.exists(dummy_dir): os.makedirs(dummy_dir)
-        output_fimo = tempfile.mkdtemp(dir=dummy_dir, prefix="fimo")
-        fimo_file = os.path.join(output_fimo, "fimo.txt")
-        
         try:
-           cmd = [os.path.join(meme_path, "fimo"), "--text", "--thresh", str(fimo_pvalue_threshold)]
-           if max_stored_matches is not None:
-               cmd += ["--max-stored-scores", str(max_stored_matches)]
-           cmd += [database_file, fasta_file]
-           process = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-           with open(fimo_file, "wb") as fh:
-               fh.write(process)
-           with open(fimo_file, "r") as fimo_output:
-               fimo_obj = Fimo(fimo_output.read().split("\n"))
+           fimo_file=os.path.join(output_fimo,"fimo.txt")
+           if max_stored_matches is None:
+              process = subprocess.check_output([os.path.join(meme_path, "fimo"), "-o",output_fimo, "--thresh", str(fimo_pvalue_threshold) , database_file, fasta_file], stderr=subprocess.STDOUT)
+              #print("%s -o %s --text --thresh %s %s %s > %s\n"%(os.path.join(meme_path, "fimo"), output_fimo, str(fimo_pvalue_threshold),database_file, fasta_file,fimo_file))
+           else:
+              process = subprocess.check_output([os.path.join(meme_path, "fimo"), "-o",output_fimo, "--thresh", str(fimo_pvalue_threshold) ,"--max-stored-scores", str(max_stored_matches), database_file, fasta_file], stderr=subprocess.STDOUT)
+           fimo_output=open(fimo_file,"r")
+           # Get Fimo object #
+           fimo_obj = Fimo(fimo_output.read().split("\n"))
            shutil.rmtree(output_fimo)
            return fimo_obj
-        except subprocess.CalledProcessError as e:
-           raise ValueError("Could not exec FIMO for %s: %s" % (fasta_file, e.output))
-
-
-
+        except:
+         try:
+           if not os.path.exists(output_fimo): os.makedirs(output_fimo)
+           fimo_file=os.path.join(output_fimo,"fimo.txt")
+           sys.stdout.write("\t-- execute system '--text' fimo option\n")
+           if max_stored_matches is None:
+              #print("%s -o %s --text --thresh %s %s %s > %s\n"%(os.path.join(meme_path, "fimo"), output_fimo, str(fimo_pvalue_threshold),database_file, fasta_file,fimo_file))
+              os.system("%s -o %s --text --thresh %s %s %s > %s\n"%(os.path.join(meme_path, "fimo"), output_fimo, str(fimo_pvalue_threshold),database_file, fasta_file,fimo_file))
+           else:
+              #print("%s -o %s --text --thresh %s --max-stored-scores %s %s %s > %s\n"%(os.path.join(meme_path, "fimo"), output_fimo, str(fimo_pvalue_threshold),str(max_stored_matches),database_file, fasta_file,fimo_file))
+              os.system("%s -o %s --text --thresh %s --max-stored-scores %s %s %s > %s\n"%(os.path.join(meme_path, "fimo"), output_fimo, str(fimo_pvalue_threshold),str(max_stored_matches),database_file, fasta_file,fimo_file))
+           fimo_output=open(fimo_file,"r")
+           # Get Fimo object #
+           fimo_obj = Fimo(fimo_output.read().split("\n"))
+           shutil.rmtree(output_fimo)
+           return fimo_obj
+         except:
+           raise ValueError("Could not exec FIMO for %s" % fasta_file)
     except:
         raise ValueError("Could not exec FIMO for %s" % fasta_file)
 
