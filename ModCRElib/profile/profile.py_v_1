@@ -456,8 +456,10 @@ def calculate_single_profile_by_thread(dna_file,thresholds,energy_profile,pdb_fi
            scr.write(output,protein_name=protein_name,normal=True,overwrite=True)
         # Flush
         sys.stdout.flush()
+        if verbose:sys.stdout.write("\t-- CHECK BY PATRICK: one iteration done %s, %s, %s ...\n" %(len(dna_sequence), interface_length + 1, i))
 
-
+    if verbose: sys.stdout.write("\t-- CHECK BY PATRICK: PASSED ...\n")
+    sys.stdout.flush()
     return profile
 
  except Exception as e:
@@ -1336,6 +1338,7 @@ class ProfileProtein(object):
         if position not in list(range(len(self._dna))):
             raise IndexError("Energy score position %s is outside the DNA sequence" % position)
         if position not in self._energy_scores:
+            print(self._energy_scores, position, self._dna)
             raise KeyError("No energy score stored at position %s" % position)
         return self._energy_scores.get(position)
 
@@ -1349,12 +1352,9 @@ class ProfileProtein(object):
         if scr is None:
             raise ValueError("Cannot build energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
-            try:
-             scr=self.get_energy_score_by_position(int(i))
-            except Exception as e:
-             print(f"Error: {e}. Continue with the next position")
-             continue
+        #EDIT PATRICK Due to indexing error changing all cases (range(len(self._dna)-binding_length+1) to range(len(self._dna)-binding_length))
+        for i in range(len(self._dna)-binding_length):
+            scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
             if len(list(score_per_nucleotide.keys()))<=0:continue
@@ -1379,12 +1379,8 @@ class ProfileProtein(object):
         if scr is None:
             raise ValueError("Cannot build weighted energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
-            try:
-              scr=self.get_energy_score_by_position(i)
-            except Exception as e:
-             print(f"Error: {e}. Continue with the next position")
-             continue
+        for i in range(len(self._dna)-binding_length):
+            scr=self.get_energy_score_by_position(i)
             if scr is None:  continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
             if len(list(score_per_nucleotide.keys()))<=0:continue
@@ -1408,12 +1404,8 @@ class ProfileProtein(object):
         if scr is None:
             raise ValueError("Cannot build best energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
-            try:
-              scr=self.get_energy_score_by_position(i)
-            except Exception as e:
-             print(f"Error: {e}. Continue with the next position")
-             continue
+        for i in range(len(self._dna)-binding_length):
+            scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
             if len(list(score_per_nucleotide.keys()))<=0:continue
@@ -1438,12 +1430,8 @@ class ProfileProtein(object):
         if scr is None:
             raise ValueError("Cannot build best weighted energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
-            try:
-             scr=self.get_energy_score_by_position(i)
-            except Exception as e:
-             print(f"Error: {e}. Continue with the next position")
-             continue
+        for i in range(len(self._dna)-binding_length):
+            scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
             if len(list(score_per_nucleotide.keys()))<=0:continue
@@ -1467,12 +1455,8 @@ class ProfileProtein(object):
         if scr is None:
             raise ValueError("Cannot build per-nucleotide energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
-            try:
-             scr=self.get_energy_score_by_position(i)
-            except Exception as e:
-             print(f"Error: {e}. Continue with the next position")
-             continue
+        for i in range(len(self._dna)-binding_length):
+            scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
             if len(list(score_per_nucleotide.keys()))<=0:continue
@@ -1496,12 +1480,8 @@ class ProfileProtein(object):
         if scr is None:
             raise ValueError("Cannot build weighted per-nucleotide energy profile: missing score at position 0")
         binding_length=len(scr.get_binding_site())
-        for i in range(len(self._dna)-binding_length+1):
-            try:
-             scr=self.get_energy_score_by_position(i)
-            except Exception as e:
-             print(f"Error: {e}. Continue with the next position")
-             continue
+        for i in range(len(self._dna)-binding_length):
+            scr=self.get_energy_score_by_position(i)
             if scr is None: continue
             score_per_nucleotide=scr.get_score_per_nucleotide(normal,potential)
             if len(list(score_per_nucleotide.keys()))<=0:continue
@@ -2232,8 +2212,8 @@ class twoprofile(object):
                    visible=False
                    if thr is None: thre="1.0"
                    else: thre=thr
-                   legend_one="P1 P-val<"+str(thre)
-                   legend_two="P2 P-val<"+str(thre)
+                   legend_one="P1 P-val<"+thre
+                   legend_two="P2 P-val<"+thre
                    #trace_one =       go.Scatter(x = x, y = y, text=text_one, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 3),  fill='tonexty', hoverinfo="x+y+text", visible = visible)
                    #upper_bound_one = go.Scatter(x = x, y = y+e, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 0.8), fill='tonexty', showlegend = False, hoverinfo='none', visible = visible)
                    #lower_bound_one = go.Scatter(x = x, y = y-e, mode = 'lines', name = legend_one, legendgroup = thre, line = dict(color=red_color[ii],width = 0.8),  showlegend = False, hoverinfo='none', visible = visible)

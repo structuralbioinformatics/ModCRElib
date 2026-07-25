@@ -64,6 +64,7 @@ mkdir profiling
 cp remodels/*pdb profiling/
 mv rs573372954.fasta profiling/
 ```
+
 Create a file profiling/ASBprofilerinput.txt with the name of the folder as content (profiling)
 
 Run Profiling:
@@ -199,9 +200,9 @@ modcrelib pwm -i AGremodels -o AGpwm --pdb={path to the pdb folder installed by 
 
 Aggregate PWMs for models:
 ```bash
-modcrelib get_json ./ MultiDomain.fa TF_codes.txt files/TF_accession_family.csv files/TF_nearest_neighbor_30-100.csv AGpwm AGJSON uniprot
+modcrelib get_json {location/of/installed/ExternalPWMs} PAX_Human.fasta TF_codes.txt {install/location/files/TF_accession_family.csv} {install/location/files/TF_nearest_neighbor_30-100.csv} AGpwm AGJSON uniprot
 
-modcrelib aggregate --complete 0.95 -i AGJSON --pvalue=0.005 --threshold=0.020 -l 50 --jaspar=./ExternalPWMs/jaspar_pwms --cisbp=./ExternalPWMs/CisBP_pwms --hocomoco=./ExternalPWMs/hocomoco_pwms --modcre=AGpwm  -o AGAggregates/JSON_MAGG_PV0.005_T0.020_L50_reference --verbose --info=AGAggregates/info_JSON_MAGG_PV0.005_T0.020_L50.log --reference 0.99 --trim --dummy=AGAggregates/dummy_JSON_PV0.005_T0.020_L50
+modcrelib aggregate --complete 0.95 -i AGJSON --pvalue=0.005 --threshold=0.020 -l 50 --jaspar={location/of/installed/ExternalPWMs/jaspar_pwms} --cisbp={location/of/installed/ExternalPWMs/CisBP_pwms} --hocomoco={location/of/installed/ExternalPWMs/hocomoco_pwms} --modcre=AGpwm  -o AGAggregates/JSON_MAGG_PV0.005_T0.020_L50_reference --verbose --info=AGAggregates/info_JSON_MAGG_PV0.005_T0.020_L50.log --reference 0.99 --trim --dummy=AGAggregates/dummy_JSON_PV0.005_T0.020_L50
 
 cd AGAggregates/JSON_MAGG_PV0.005_T0.020_L50_reference/P26367/
 ```

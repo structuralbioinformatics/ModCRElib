@@ -11,8 +11,9 @@ EXE = PACKAGE / "exe"
 
 COMMANDS = {
     "doctor": None,
-    "setup": None,  
-    "model": "model_multiple_proteins.py",
+    "setup": None, 
+    "model": "model_protein.py",
+    "model_multiple": "model_multiple_proteins.py",
     "renumber": "renumberModels.py",
     "pwm": "pwm_pbm.py",
     "thread": "get_best_binding.py",
@@ -170,7 +171,8 @@ Usage:
 Commands:
     doctor            Diagnose missing dependencies
     setup             Configure paths, external files, and structural databases
-    model             Build protein models
+    model             Build protein model
+    model_multiple    Build multiple protein models
     pwm               Generate PWMs from a TF model
     thread            Generate thread files for a TF-DNA interaction
     score             Calculate the statistical potential score for TF-DNA interaction
