@@ -168,8 +168,55 @@ def generate_dynamic_config():
     modeller_bin_path = ""
     root_path = None
 
+
     # =========================================================
-    # 1. FIXED CUSTOM ENVIRONMENT VARIABLES (Resilient Check)
+    # 1. CHECK ACTIVE CONDA ENVIRONMENT & PYTHON PATH FIRST
+    # =========================================================
+    if not modeller_bin_path:
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+        if conda_prefix:
+            conda_root = Path(conda_prefix)
+            
+            # Step A: Check the nested Conda layout (lib/modeller-XX.X/bin/modpy.sh)
+            conda_lib = conda_root / "lib"
+            if conda_lib.exists():
+                # Scan for any version folder like 'modeller-10.8'
+                for item in conda_lib.iterdir():
+                    if item.is_dir() and "modeller" in item.name.lower():
+                        candidate_bin = item / "bin" / "modpy.sh"
+                        if candidate_bin.exists():
+                            root_path = item.resolve()
+                            modeller_bin_path = str(candidate_bin.parent)
+                            print(f"✓ Found Modeller via nested Conda structure -> {root_path}")
+                            break
+            
+            # Step B: Fallback to standard root 'bin' if the nested check didn't trigger
+            if not modeller_bin_path:
+                candidate_bin = conda_root / "bin" / "modpy.sh"
+                if candidate_bin.exists():
+                    root_path = conda_root.resolve()
+                    modeller_bin_path = str(candidate_bin.parent)
+                    print(f"✓ Found Modeller via active Conda environment root -> {root_path}")
+
+    # Alternative Active Python path check (sys.path)
+    if not modeller_bin_path:
+        for path_str in sys.path:
+            candidate_lib = Path(path_str) / "modlib"
+            if candidate_lib.exists():
+                for parent in candidate_lib.parents:
+                    candidate_bin = parent / "bin" / "modpy.sh"
+                    if candidate_bin.exists():
+                        root_path = parent.resolve()
+                        modeller_bin_path = str(candidate_bin.parent)
+                        print(f"✓ Found Modeller via Python site-packages -> {root_path}")
+                        break
+            if modeller_bin_path:
+                break
+
+
+
+    # =========================================================
+    # 2. FIXED CUSTOM ENVIRONMENT VARIABLES (Resilient Check)
     # =========================================================
     custom_env_root = os.environ.get("MODELLER_ROOT") or os.environ.get("MODELLER_HOME")
     if custom_env_root:
@@ -191,32 +238,6 @@ def generate_dynamic_config():
                     print(f"✓ Found Modeller via custom environment variable -> {root_path}")
                     break
 
-    # =========================================================
-    # 2. CHECK CONDA ENVIRONMENT
-    # =========================================================
-    if not modeller_bin_path:
-        conda_prefix = os.environ.get("CONDA_PREFIX")
-        if conda_prefix:
-            candidate_bin = Path(conda_prefix) / "bin" / "modpy.sh"
-            if candidate_bin.exists():
-                root_path = Path(conda_prefix).resolve()
-                modeller_bin_path = str(candidate_bin.parent)
-                print(f"✓ Found Modeller via active Conda environment -> {root_path}")
-
-    # Alternative Conda / Python path check
-    if not modeller_bin_path:
-        for path_str in sys.path:
-            candidate_lib = Path(path_str) / "modlib"
-            if candidate_lib.exists():
-                for parent in candidate_lib.parents:
-                    candidate_bin = parent / "bin" / "modpy.sh"
-                    if candidate_bin.exists():
-                        root_path = parent.resolve()
-                        modeller_bin_path = str(candidate_bin.parent)
-                        print(f"✓ Found Modeller via Python site-packages -> {root_path}")
-                        break
-            if modeller_bin_path:
-                break
 
     # =========================================================
     # 3. CHECK ACTIVE SYSTEM PATH
