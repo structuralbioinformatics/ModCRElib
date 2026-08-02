@@ -186,7 +186,7 @@ LQ
 
 Model multiple TF-DNA interactions
 ```bash
-modcrelib model -v -d ./dummy -i PAX_Human.fasta -o ./AGmodels --pdb={path to the pdb folder installed by modcrelib} --best --renumerate  --n-temp=1 --n-total=1 --n-model={Desired number of models}
+modcrelib model_multiple -v -d ./dummy -i PAX_Human.fasta -o ./AGmodels --pdb={path to the pdb folder installed by modcrelib} --best --renumerate  --n-temp=1 --n-total=1 --n-model={Desired number of models}
 ```
 Process the models:
 ```bash
@@ -197,6 +197,8 @@ Generate PWMs for models:
 ```bash
 modcrelib pwm -i AGremodels -o AGpwm --pdb={path to the pdb folder installed by modcrelib} --pbm={path to the pbm folder installed by modcrelib}  --refine 2  --dummy=./dummy --auto --known
 ```
+
+Create a file named TF_codes.txt with the uniprot id of the TF whose pwms are to be aggregates (P26367) 
 
 Aggregate PWMs for models:
 ```bash
