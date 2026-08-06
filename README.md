@@ -454,7 +454,7 @@ Results can be viewed in a few ways. TFs binding the sequence and their binding 
 
 We can view TFs binding to the full scanned DNA sequence predicted in the previous step. This requires a bit of file processing first.
 
-**Step 7 — `model`** can take thread files as input instead of multi-FASTA files:
+**Step 7 — `model_multiple`** can take thread files as input instead of multi-FASTA files:
 - `-i` a file containing a list of locations of the thread files to use
 - `-t` indicates that threads are used instead of amino acid sequences
 - `-o` the output folder location

@@ -455,11 +455,59 @@ letter-probability matrix: alength= 4 w= 20 nsites= 1 E= 0
 0.00 0.50 0.00 0.50
 ```
 
+The output of the aggragation will produce motifs up to the length specified. This may result in leading and tailing empty positions which will have to be removed.<br>
+You can do this manually or with the following python script:
+
+```python
+import sys, re
+
+with open("Temp.meme", "r") as f:
+    lines = f.readlines()
+
+out = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    if line.startswith("letter-probability matrix:"):
+        match = re.search(r"w=\s*(\d+)", line)
+        if match:
+            w = int(match.group(1))
+            header = line
+            i += 1
+            matrix = []
+            for _ in range(w):
+                if i < len(lines):
+                    matrix.append(lines[i])
+                    i += 1
+            
+            # Identify non-zero rows
+            non_zero_indices = [
+                idx for idx, row in enumerate(matrix)
+                if any(float(val) > 0 for val in row.strip().split())
+            ]
+            
+            if non_zero_indices:
+                start, end = non_zero_indices[0], non_zero_indices[-1]
+                trimmed_matrix = matrix[start:end+1]
+                new_w = len(trimmed_matrix)
+                # Update width in header
+                header = re.sub(r"w=\s*\d+", f"w= {new_w}", header)
+                out.append(header)
+                out.extend(trimmed_matrix)
+            continue
+    out.append(line)
+    i += 1
+
+with open("Temp_trimmed.meme", "w") as f:
+    f.writelines(out)
+```
+
+
 
 ```bash
 cat cluster_*/*average*.meme >> Temp.meme
 
-tomtom -no-ssc -oc PAX6tomtom -verbosity 1 -min-overlap 5 -dist pearson -evalue -thresh 10.0 Temp.meme PAX6_database.meme
+tomtom -no-ssc -oc PAX6tomtom -verbosity 1 -min-overlap 5 -dist pearson -evalue -thresh 10.0 Temp_trimmed.meme PAX6_database.meme
 ```
 
 #### TomTom comparison results from a aggregate of 10 PAX6 models. 

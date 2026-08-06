@@ -347,9 +347,6 @@ def parse_mutation_file(path):
 # --------------------------------------------------------------------------
 
 def mutate_residue(residue_atoms, target_base):
-    """Return a new list[Atom] for this residue with the base swapped to
-    `target_base`, keeping backbone/sugar atoms untouched."""
-
     ring_coords = {}
     for a in residue_atoms:
         if a.name in RING_ATOMS:
@@ -365,16 +362,31 @@ def mutate_residue(residue_atoms, target_base):
 
     ideal = IDEAL_BASES[target_base]
 
-    # Keep everything that ISN'T one of the standard base-ring/exocyclic
-    # atom names for ANY of the 5 bases (covers the purine<->pyrimidine
-    # case where atom sets differ in size/composition).
     all_possible_base_atoms = set()
     for coords in IDEAL_BASES.values():
         all_possible_base_atoms |= set(coords.keys())
     kept = [a for a in residue_atoms if a.name not in all_possible_base_atoms]
 
     template = kept[0] if kept else residue_atoms[0]
-    new_atoms = list(kept)
+
+    # Preserve the file's existing naming convention (DA/DC/DG/DT for DNA,
+    # RA/RC/RG/RU or bare A/C/G/U for RNA) and apply it to EVERY atom in
+    # the residue, not just the newly built base atoms -- otherwise the
+    # residue ends up with a mixed resname (old code on kept backbone
+    # atoms, new code only on the swapped-in base atoms).
+    orig_resname = template.resname.strip().upper()
+    if orig_resname.startswith("D") and len(orig_resname) > 1:
+        target_resname = "D" + target_base
+    elif orig_resname.startswith("R") and len(orig_resname) > 1:
+        target_resname = "R" + target_base
+    else:
+        target_resname = target_base
+
+    new_atoms = []
+    for a in kept:
+        a.resname = target_resname
+        new_atoms.append(a)
+
     for name, xyz in ideal.items():
         new_xyz = R @ xyz + t
         a = Atom.__new__(Atom)
@@ -382,7 +394,7 @@ def mutate_residue(residue_atoms, target_base):
         a.serial = 0  # renumbered on write
         a.name = name
         a.altloc = " "
-        a.resname = target_base
+        a.resname = target_resname
         a.chain = template.chain
         a.resseq = template.resseq
         a.icode = template.icode
