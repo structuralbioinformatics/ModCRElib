@@ -17,6 +17,8 @@
 
 ---
 
+(modcrelib was tested on MACOS 26.5.2, Apple M3 arm64 and Ubuntu 24.04.2 LTS, 6.8.0-136-generic x86_64)
+
 ## Installation instructions
 
 1. Download this repository.
